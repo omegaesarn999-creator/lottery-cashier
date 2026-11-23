@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>โปรแกรมรับขึ้นเงินล๊อตเตอรี่</title>
+<style>
+  :root {
+    --ink: #1c2530; --muted: #66727f; --line: #d9dee4; --bg: #f3f5f7; --card: #ffffff;
+    --accent: #0f6b4f; --accent-soft: #e4f2ec; --warn: #b3261e; --warn-soft: #fbe9e7; --gold: #8a6100;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Leelawadee UI", "Sarabun", "Noto Sans Thai", Tahoma, sans-serif; font-size: 16px; color: var(--ink); background: var(--bg); }
+  button, input, select { font: inherit; color: inherit; }
+  .top { background: var(--accent); color: #fff; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; padding: 10px 20px; position: sticky; top: 0; z-index: 5; }
+  .brand { font-size: 20px; font-weight: 700; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 4px; flex: 1; }
+  .tabs button { background: transparent; border: 0; color: #d5ebe3; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+  .tabs button:hover { background: rgba(255,255,255,.12); }
+  .tabs button.on { background: #fff; color: var(--accent); }
+  .top-right { text-align: right; font-size: 14px; line-height: 1.35; }
+  .top-right b { font-size: 17px; }
+  main { max-width: 1180px; margin: 0 auto; padding: 20px; }
+  section[hidden] { display: none; }
+  h2 { margin: 0 0 14px; font-size: 22px; }
+  h3 { margin: 0 0 10px; font-size: 17px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 860px) { .grid2 { grid-template-columns: 1fr; } }
+  label.f { display: flex; flex-direction: column; gap: 4px; font-size: 14px; color: var(--muted); }
+  input[type=text], input[type=number], input[type=tel], input[type=date], select { border: 1px solid #b9c1ca; border-radius: 8px; padding: 8px 10px; background: #fff; min-width: 0; }
+  input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .btn { border: 1px solid #b9c1ca; background: #fff; border-radius: 8px; padding: 9px 16px; cursor: pointer; font-weight: 600; }
+  .btn:hover { background: #f0f2f4; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { background: #0c5740; }
+  .btn.danger { color: var(--warn); border-color: #e2b4b0; }
+  .btn.small { padding: 4px 10px; font-size: 14px; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; }
+  th { background: #eef1f4; font-weight: 600; font-size: 14px; }
+  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+  td.c, th.c { text-align: center; }
+  tr.sum td { background: #f7f8fa; font-weight: 700; }
+  tr.void td { color: #9aa3ad; text-decoration: line-through; }
+  tr.void td.keep { text-decoration: none; }
+  .billtable input.qty { width: 92px; text-align: right; font-size: 17px; padding: 5px 8px; }
+  .billtable input.rate { width: 80px; text-align: right; font-weight: 700; }
+  .billtable td.sumcell { min-width: 130px; }
+  .grand { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  @media (max-width: 700px) { .grand { grid-template-columns: 1fr; } }
+  .stat { border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; background: #fff; }
+  .stat .k { font-size: 14px; color: var(--muted); }
+  .stat .v { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .stat.pay { background: var(--accent-soft); border-color: #a9d3c3; }
+  .stat.pay .v { color: var(--accent); font-size: 30px; }
+  .stat.fee .v { color: var(--gold); }
+  .stat.bad .v { color: var(--warn); }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .hint { color: var(--muted); font-size: 14px; }
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 13px; font-weight: 600; }
+  .tag.ok { background: var(--accent-soft); color: var(--accent); }
+  .tag.void { background: var(--warn-soft); color: var(--warn); }
+  .scroll { overflow-x: auto; }
+  #toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); background: #1c2530; color: #fff; padding: 10px 18px; border-radius: 10px; opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 30; }
+  #toast.show { opacity: 1; }
+
+  .modal { position: fixed; inset: 0; background: rgba(20,28,36,.55); overflow: auto; z-index: 20; padding: 16px; }
+  .modal[hidden] { display: none; }
+  .modal-bar { max-width: 100mm; margin: 0 auto 10px; display: flex; gap: 8px; justify-content: flex-end; }
+  /* กระดาษแนวตั้ง กว้าง 10 ซม. ยาว 20 ซม. */
+  .sheet { background: #fff; width: 100mm; max-width: 100%; margin: 0 auto; padding: 4mm; color: #000; position: relative; box-shadow: 0 8px 30px rgba(0,0,0,.3); font-size: 11px; line-height: 1.3; }
+  .sheet h1 { font-size: 15px; margin: 0; text-align: center; }
+  .sheet h3 { font-size: 12px; margin: 6px 0 2px !important; }
+  .sheet .sub { text-align: center; font-size: 12px; margin: 0 0 3px; }
+  .sheet .meta { display: grid; grid-template-columns: 1fr auto; gap: 0 8px; margin-bottom: 3px; font-size: 11px; }
+  .sheet .meta.one { grid-template-columns: 1fr; }
+  .sheet table { margin-bottom: 3px; font-size: 11px; break-inside: avoid; }
+  .sheet th, .sheet td { border: 1px solid #555; padding: 1px 4px; font-size: inherit; }
+  .sheet th { background: #e9e9e9; }
+  .sheet tr.sum td { background: #f3f3f3; }
+  .sheet .final td { font-size: 12px; font-weight: 700; }
+  .sheet .final tr.pay td { font-size: 14px; background: #e9e9e9; }
+  .sheet .sign { display: flex; justify-content: space-around; margin-top: 11mm; text-align: center; font-size: 10px; }
+  .sheet .sign div { width: 44%; border-top: 1px dotted #000; padding-top: 2px; }
+  .sheet .voidmark { position: absolute; top: 38%; left: 0; right: 0; text-align: center; font-size: 48px; font-weight: 800; color: rgba(179,38,30,.28); transform: rotate(-18deg); pointer-events: none; }
+  .sheet .small { font-size: 9px; }
+  .sheet .rep table { font-size: 10px; }
+  .sheet .rep th, .sheet .rep td { padding: 1px 3px; }
+  .sheet .rep td.n { white-space: nowrap; }
+  /* วันที่เวลา + ผู้ใช้ + หน้าเข้าสู่ระบบ */
+  #clock { font-weight: 700; font-variant-numeric: tabular-nums; user-select: none; }
+  #userBox .btn { color: var(--ink); margin-left: 6px; padding: 2px 10px; }
+  #auth { display: none; padding: 20px 12px; }
+  body.logged-out #auth { display: block; }
+  body.logged-out #tabs, body.logged-out main, body.logged-out .cashline, body.logged-out #userBox { display: none; }
+  .authcard { max-width: 420px; margin: 24px auto; }
+  .authcard h2 { text-align: center; }
+  .authcard label.f { margin-bottom: 14px; }
+  .authcard input { width: 100%; font-size: 18px; padding: 11px 12px; }
+  .authcard input[readonly] { background: #f1f3f5; font-weight: 700; letter-spacing: 1px; }
+  .authcard .btn { width: 100%; padding: 13px; font-size: 17px; margin-bottom: 10px; }
+  .authcard .or { text-align: center; color: var(--muted); font-size: 14px; margin: 4px 0 12px; }
+
+  .sheet .compact { line-height: 1.12; }
+  .sheet .compact table { font-size: 9px; margin-bottom: 2px; }
+  .sheet .compact th, .sheet .compact td { padding: 0 4px; }
+  .sheet .compact .meta { font-size: 10px; }
+  .sheet .compact .final td { font-size: 10px; }
+  .sheet .compact .final tr.pay td { font-size: 12px; }
+  .sheet .compact .sign { margin-top: 8mm; }
+  /* ฟอร์มกรอกบิล + แถบปุ่มด้านล่าง */
+  #tab-bill { max-width: 520px; margin: 0 auto; }
+  .forms { display: grid; grid-template-columns: 1fr; gap: 16px; margin-bottom: 16px; }
+  .forms .card { margin: 0; }
+  .denoms input.denom { width: 110px; text-align: right; font-size: 17px; padding: 5px 8px; }
+  .formhead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-weight: 700; }
+  .addform { width: 100%; border-style: dashed; padding: 12px; margin-bottom: 16px; color: var(--accent); }
+  .banner { background: var(--accent-soft); border: 1px solid #a9d3c3; color: var(--accent); border-radius: 10px; padding: 10px 14px; margin-bottom: 16px; font-weight: 600; }
+  .banner.edit { background: #fff6dc; border-color: #e6cf8a; color: var(--gold); }
+  .actionbar { position: sticky; bottom: 0; z-index: 4; background: #fff; border: 1px solid var(--line); border-radius: 12px 12px 0 0; box-shadow: 0 -4px 14px rgba(0,0,0,.08); padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); }
+  .actionbar .paybar { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; color: var(--muted); }
+  .actionbar .paybar b { font-size: 22px; color: var(--accent); font-variant-numeric: tabular-nums; }
+  .actionbar .btns { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  input:disabled { background: #f1f3f5; color: #333; -webkit-text-fill-color: #333; opacity: 1; }
+
+  /* มือถือ */
+  @media (max-width: 640px) {
+    body { font-size: 15px; }
+    .top { padding: 8px 10px; gap: 6px 10px; }
+    .brand { font-size: 17px; flex: 1; }
+    .tabs { order: 3; flex-basis: 100%; flex-wrap: nowrap; overflow-x: auto; }
+    .tabs button { padding: 7px 12px; white-space: nowrap; }
+    .top-right { font-size: 12px; }
+    .top-right b { font-size: 15px; }
+    main { padding: 10px; }
+    h2 { font-size: 19px; margin-bottom: 10px; }
+    .card { padding: 10px; margin-bottom: 10px; }
+    th, td { padding: 5px 6px; }
+    input[type=text], input[type=number], select { font-size: 16px; }
+    .billtable input.qty, .billtable input.rate { width: 70px; }
+    .billtable td.sumcell { min-width: 0; }
+    .forms { gap: 10px; margin-bottom: 10px; }
+    .addform, .banner { margin-bottom: 10px; }
+    .grand { gap: 6px; }
+    .grand .stat { display: flex; justify-content: space-between; align-items: baseline; padding: 7px 12px; }
+    .stat .v { font-size: 19px; }
+    .stat.pay .v { font-size: 22px; }
+    .deskonly { display: none; }
+    .stats { grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+    #toast { bottom: auto; top: 132px; width: max-content; max-width: 90vw; }
+    .actionbar { margin: 0 -10px; border-radius: 0; border-left: 0; border-right: 0; }
+    .actionbar .btn { padding: 12px 2px; }
+    .modal { padding: 6px; }
+  }
+
+  @media print {
+    @page { size: 100mm 200mm; margin: 4mm; }
+    body { background: #fff; }
+    .no-print { display: none !important; }
+    body.modal-open > :not(#modal) { display: none !important; }
+    .modal { position: static; background: none; padding: 0; overflow: visible; }
+    .sheet { box-shadow: none; width: auto; max-width: none; padding: 0; }
+  }
+</style>
+</head>
+<body>
+
+<header class="top no-print">
+  <div class="brand" id="bizNameTop"></div>
+  <nav class="tabs" id="tabs">
+    <button data-tab="bill">ออกบิล</button>
+    <button data-tab="cash">ลิ้นชักเงิน</button>
+    <button data-tab="history">ประวัติบิล</button>
+    <button data-tab="period">สรุปงวด</button>
+    <button data-tab="settings">ตั้งค่า</button>
+  </nav>
+  <div class="top-right">
+    <div id="clock" title="วันที่และเวลาปัจจุบัน (แก้ไขไม่ได้)"></div>
+    <div class="cashline">เงินสดในลิ้นชัก <b id="topCash"></b></div>
+    <div id="userBox"></div>
+  </div>
+</header>
+
+<section id="auth" class="no-print"></section>
+
+<main class="no-print">
+  <section id="tab-bill"></section>
+  <section id="tab-cash" hidden></section>
+  <section id="tab-history" hidden></section>
+  <section id="tab-period" hidden></section>
+  <section id="tab-settings" hidden></section>
+</main>
+
+<div id="modal" class="modal" hidden>
+  <div class="modal-bar no-print">
+    <button class="btn primary" data-action="print">พิมพ์</button>
+    <button class="btn" data-action="close-modal">ปิด</button>
+  </div>
+  <div id="sheet" class="sheet"></div>
+</div>
+<div id="toast" class="no-print"></div>
+
+<script>
+'use strict';
+/* ===================== ข้อมูลและการจัดเก็บ ===================== */
+const STORE_KEY = 'lotteryCashier.v1';
+const DEFAULT_PRIZES = [
+  ['2ตัวท้าย', 2000], ['3หน้า', 4000], ['2+3เบิ้ล', 6000], ['3+3เบิ้ล', 8000],
+  ['รางวัลที่5', 20000], ['รางวัลที่4', 40000], ['รางวัลที่3', 80000],
+  ['รางวัลที่2', 200000], ['ข้างเคียง', 100000], ['รางวัลที่1', 6000000]
+];
+function defaultState() {
+  return {
+    settings: {
+      bizName: 'รับขึ้นเงินล๊อตเตอรี่',
+      cashier: '',
+      rates: [0.75, 1.25, 1.25],   // ฟอร์มที่ 1, 2 และฟอร์มที่กดเพิ่ม
+      prizes: DEFAULT_PRIZES.map(([name, amount]) => ({ name, amount }))
+    },
+    shops: {},   // ชื่อร้าน -> { rates: [a, b] }
+    bills: [],
+    cash: [],
+    seq: 0,
+    users: [],   // { code: 'KJ001', nick, phone, ts }
+    userSeq: 0
+  };
+}
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (!raw) return defaultState();
+    const s = JSON.parse(raw), d = defaultState();
+    return {
+      settings: Object.assign(d.settings, s.settings || {}),
+      shops: s.shops || {}, bills: s.bills || [], cash: s.cash || [], seq: s.seq || 0,
+      users: s.users || [], userSeq: s.userSeq || 0
+    };
+  } catch (e) {
+    alert('อ่านข้อมูลที่บันทึกไว้ไม่ได้: ' + e.message);
+    return defaultState();
+  }
+}
+function saveState() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); return true; }
+  catch (e) { alert('บันทึกข้อมูลไม่สำเร็จ: ' + e.message); return false; }
+}
+let state = loadState();
+
+/* ===================== ตัวช่วย ===================== */
+const $ = (sel, root) => (root || document).querySelector(sel);
+const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const round2 = n => Math.round((n + Number.EPSILON) * 100) / 100;
+const fmt = n => Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmt0 = n => Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
+const num = v => { const n = parseFloat(String(v == null ? '' : v).replace(/,/g, '')); return isFinite(n) ? n : 0; };
+const pad = (n, w) => String(n).padStart(w || 2, '0');
+const TH_MONTHS = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+function fmtDate(ts) { const d = new Date(ts); return d.getDate() + ' ' + TH_MONTHS[d.getMonth()] + ' ' + (d.getFullYear() + 543); }
+function fmtTime(ts) { const d = new Date(ts); return pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+function fmtDT(ts) { return fmtDate(ts) + ' ' + fmtTime(ts) + ' น.'; }
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+/* งวด: วันที่ 1–15 = ครึ่งแรก, 16–สิ้นเดือน = ครึ่งหลัง */
+function periodKey(ts) { const d = new Date(ts); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + (d.getDate() <= 15 ? 1 : 2); }
+function periodRange(key) {
+  const [y, m, h] = key.split('-').map(Number);
+  return { start: new Date(y, m - 1, h === 1 ? 1 : 16).getTime(), end: (h === 1 ? new Date(y, m - 1, 16) : new Date(y, m, 1)).getTime() };
+}
+function periodLabel(key) {
+  const [y, m, h] = key.split('-').map(Number);
+  const last = new Date(y, m, 0).getDate();
+  return 'งวด ' + (h === 1 ? '1–15' : '16–' + last) + ' ' + TH_MONTHS[m - 1] + ' ' + (y + 543);
+}
+function allPeriods() {
+  const set = new Set([periodKey(Date.now())]);
+  state.bills.forEach(b => set.add(periodKey(b.ts)));
+  state.cash.forEach(c => set.add(periodKey(c.ts)));
+  return Array.from(set).sort().reverse();
+}
+function periodOptions(selected, withAll) {
+  return (withAll ? '<option value="">ทุกงวด</option>' : '') +
+    allPeriods().map(k => '<option value="' + k + '"' + (k === selected ? ' selected' : '') + '>' + periodLabel(k) + '</option>').join('');
+}
+
+/* ===================== การคำนวณ (ตรงกับสูตรใน Excel ต้นแบบ) ===================== */
+function calcBill(prizes, rates, qtys) {
+  const sections = rates.map((rate, i) => {
+    const rows = prizes.map((p, j) => {
+      const qty = (qtys[i] && qtys[i][j]) || 0;
+      return { name: p.name, amount: p.amount, qty, sum: p.amount * qty };
+    });
+    const total = rows.reduce((a, r) => a + r.sum, 0);   // รวม
+    const fee = round2(total * rate / 100);                // %
+    return { rate, rows, total, fee, net: round2(total - fee) };  // สรุป
+  });
+  return {
+    sections,
+    fee: round2(sections.reduce((a, s) => a + s.fee, 0)),     // %รวม
+    total: round2(sections.reduce((a, s) => a + s.total, 0)), // ยอดรวม
+    net: round2(sections.reduce((a, s) => a + s.net, 0))      // ยอดลด%รวม
+  };
+}
+const CASH_TYPES = { open: 'เบิกเงินตั้งต้น', add: 'เติมเงิน', ret: 'คืนเงิน/นำเงินออก' };
+const cashSign = c => (c.type === 'ret' ? -1 : 1);
+const DENOMS = [1000, 500, 100, 50, 20];   // แบงค์ที่นับตอนรับเงินสด
+// รายการเงินหนึ่งรายการ = เงินสด (นับแบงค์) + เงินโอน; รายการเก่าที่ไม่มีรายละเอียดถือเป็นเงินสดทั้งหมด
+const cashPart = c => (c.cashAmt != null ? c.cashAmt : c.amount);
+const transferPart = c => c.transfer || 0;
+function cashDetail(c) {
+  const parts = DENOMS.filter(d => c.notes && c.notes[d]).map(d => fmt0(d) + '×' + fmt0(c.notes[d]));
+  const out = [];
+  if (cashPart(c)) out.push('เงินสด ' + fmt(cashPart(c)) + (parts.length ? ' (' + parts.join(', ') + ')' : ''));
+  if (transferPart(c)) out.push('เงินโอน ' + fmt(transferPart(c)));
+  return out.join(' · ');
+}
+function cashBalance(before) {
+  const lim = before == null ? Infinity : before;
+  let bal = 0;
+  state.cash.forEach(c => { if (!c.void && c.ts < lim) bal += cashSign(c) * c.amount; });
+  state.bills.forEach(b => { if (!b.void && b.ts < lim) bal -= b.net; });
+  return round2(bal);
+}
+
+/* ===================== แท็บ ===================== */
+let currentTab = 'bill';
+const RENDER = {};
+function showTab(name) {
+  currentTab = name;
+  $$('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === name));
+  $$('main > section').forEach(s => { s.hidden = s.id !== 'tab-' + name; });
+  RENDER[name]();
+}
+function refreshTop() {
+  $('#bizNameTop').textContent = state.settings.bizName;
+  $('#topCash').textContent = fmt(cashBalance()) + ' บาท';
+  document.title = state.settings.bizName;
+}
+function tick() { $('#clock').textContent = fmtDT(Date.now()); }   // เวลาจากเครื่อง แสดงทุกหน้า แก้ไขไม่ได้
+
+/* ===================== ผู้ใช้งาน: สมัคร / เข้าสู่ระบบ ===================== */
+const SESSION_KEY = 'lotteryCashier.session';
+let currentUser = null, authView = 'login';
+const nextUserCode = () => 'KJ' + pad((state.userSeq || 0) + 1, 3);
+const userLabel = () => (currentUser ? currentUser.nick + ' ' + currentUser.code : '');
+function renderAuth() {
+  $('#auth').innerHTML = authView === 'signup'
+    ? '<div class="card authcard"><h2>สมัครผู้ใช้งาน</h2>' +
+      '<label class="f">รหัส (ระบบออกให้อัตโนมัติ)<input type="text" id="suCode" value="' + nextUserCode() + '" readonly></label>' +
+      '<label class="f">ชื่อเล่น<input type="text" id="suNick" maxlength="30" autocomplete="off" enterkeyhint="next"></label>' +
+      '<label class="f">เบอร์โทร<input type="tel" id="suPhone" maxlength="15" inputmode="tel" autocomplete="off" enterkeyhint="done"></label>' +
+      '<button class="btn primary" data-action="auth-signup">ตกลง</button>' +
+      '<button class="btn" data-action="auth-show-login">ยกเลิก</button></div>'
+    : '<div class="card authcard"><h2>เข้าสู่ระบบ</h2>' +
+      '<label class="f">รหัสผู้ใช้งาน<input type="text" id="liCode" placeholder="เช่น KJ001" autocomplete="off" autocapitalize="characters" enterkeyhint="go"></label>' +
+      '<button class="btn primary" data-action="auth-login">เข้าสู่ระบบ</button>' +
+      '<div class="or">ยังไม่มีรหัส?</div>' +
+      '<button class="btn" data-action="auth-show-signup">สมัคร</button></div>';
+}
+function applyAuth() {
+  const code = localStorage.getItem(SESSION_KEY);
+  currentUser = state.users.find(u => u.code === code) || null;
+  document.body.classList.toggle('logged-out', !currentUser);
+  $('#userBox').innerHTML = currentUser ? 'ผู้ใช้: <b>' + esc(currentUser.nick) + '</b> (' + esc(currentUser.code) + ')<button class="btn small" data-action="logout">ออก</button>' : '';
+  if (currentUser) showTab(currentTab); else { authView = 'login'; renderAuth(); }
+}
+function login() {
+  const code = $('#liCode').value.trim().toUpperCase();
+  if (!code) { toast('กรุณาใส่รหัสผู้ใช้งาน'); $('#liCode').focus(); return; }
+  if (!state.users.some(u => u.code === code)) { toast('ไม่พบรหัส ' + code + ' — ถ้ายังไม่มีรหัส กด "สมัคร"'); return; }
+  localStorage.setItem(SESSION_KEY, code); applyAuth();
+}
+function signup() {
+  const nick = $('#suNick').value.trim(), phone = $('#suPhone').value.trim();
+  if (!nick) { toast('กรุณาใส่ชื่อเล่น'); $('#suNick').focus(); return; }
+  if (phone && !/^[0-9+\- ]{9,15}$/.test(phone)) { toast('เบอร์โทรไม่ถูกต้อง'); $('#suPhone').focus(); return; }
+  const code = nextUserCode();
+  state.userSeq = (state.userSeq || 0) + 1;
+  state.users.push({ code, nick, phone, ts: Date.now() });
+  if (!saveState()) return;
+  localStorage.setItem(SESSION_KEY, code); applyAuth();
+  toast('สมัครแล้ว รหัสของคุณคือ ' + code);
+}
+function logout() {
+  if (draft && draftHasWork() && !confirm('ฟอร์มออกบิลมีข้อมูลที่ยังไม่ได้เซฟ ต้องการออกจากระบบหรือไม่?')) return;
+  localStorage.removeItem(SESSION_KEY); draft = null; closeSheet(); applyAuth();
+}
+
+/* ===================== 1) ออกบิล ===================== */
+const MAX_FORMS = 3;
+let draft = null;
+// draft.no = เลขที่บิลที่บันทึกแล้ว (null = บิลใหม่), draft.locked = แสดงบิลที่บันทึกแล้วแบบล็อก รอปุ่ม "แก้ไขบิล"
+function defaultRate(i) { const r = state.settings.rates; return r[i] != null ? r[i] : r[r.length - 1]; }
+function newDraft() {
+  draft = {
+    no: null, locked: false, shop: '',
+    prizes: state.settings.prizes.map(p => ({ name: p.name, amount: p.amount })),
+    rates: [defaultRate(0), defaultRate(1)], qtys: [[], []]
+  };
+}
+function loadBillToDraft(b, locked) {
+  draft = {
+    no: b.no, locked, shop: b.shop,
+    prizes: b.sections[0].rows.map(r => ({ name: r.name, amount: r.amount })),   // ใช้ราคารางวัล ณ วันที่ออกบิล
+    rates: b.sections.map(s => s.rate), qtys: b.sections.map(s => s.rows.map(r => r.qty))
+  };
+}
+function draftHasWork() {
+  return !draft.locked && (draft.no != null || draft.qtys.some(q => q.some(v => v > 0)));
+}
+RENDER.bill = function () {
+  if (!draft) newDraft();
+  const prizes = draft.prizes, dis = draft.locked ? ' disabled' : '';
+  const saved = draft.no ? state.bills.find(b => b.no === draft.no) : null;
+  const sectionHtml = i =>
+    '<div class="card"><div class="formhead"><span>ฟอร์มที่ ' + (i + 1) + '</span>' +
+    (i >= 2 && !draft.locked ? '<button class="btn small danger" data-action="form-del" data-i="' + i + '">ลบฟอร์ม</button>' : '') + '</div>' +
+    '<table class="billtable">' +
+    '<tr><th>%</th><th class="n"><input class="rate" type="number" step="0.01" min="0" inputmode="decimal" data-rate="' + i + '" value="' + draft.rates[i] + '"' + dis + '></th><th class="n">จำนวน</th><th class="n">ยอด</th></tr>' +
+    prizes.map((p, j) =>
+      '<tr><td>' + esc(p.name) + '</td><td class="n">' + fmt0(p.amount) + '</td>' +
+      '<td class="n"><input class="qty" type="number" min="0" step="1" inputmode="numeric" enterkeyhint="next" data-sec="' + i + '" data-row="' + j + '" value="' + (draft.qtys[i][j] || '') + '"' + dis + '></td>' +
+      '<td class="n sumcell" id="sum-' + i + '-' + j + '"></td></tr>').join('') +
+    '<tr class="sum"><td colspan="3" class="n">รวม</td><td class="n" id="tot-' + i + '"></td></tr>' +
+    '<tr class="sum"><td colspan="2" class="n">%</td><td class="n" id="ratelbl-' + i + '"></td><td class="n" id="fee-' + i + '"></td></tr>' +
+    '<tr class="sum"><td colspan="3" class="n">สรุป</td><td class="n" id="net-' + i + '"></td></tr>' +
+    '</table></div>';
+  $('#tab-bill').innerHTML =
+    '<h2>ออกบิลรับขึ้นเงิน</h2>' +
+    (saved ? (draft.locked
+      ? '<div class="banner">บิล ' + esc(saved.no) + ' บันทึกแล้ว · ' + fmtDT(saved.ts) + ' — กด "บิลใหม่" เพื่อออกบิลถัดไป หรือ "แก้ไขบิล" เพื่อแก้</div>'
+      : '<div class="banner edit">กำลังแก้ไขบิล ' + esc(saved.no) + ' (' + fmtDT(saved.ts) + ') — แก้แล้วกด "เซฟบิล"</div>') : '') +
+    '<div class="card"><div class="row">' +
+    '<label class="f" style="flex:1;min-width:220px">ชื่อร้าน / ลูกค้า<input type="text" id="shop" list="shoplist" autocomplete="off" enterkeyhint="next" value="' + esc(draft.shop) + '" placeholder="พิมพ์ชื่อร้าน"' + dis + '></label>' +
+    '<datalist id="shoplist">' + Object.keys(state.shops).sort().map(s => '<option value="' + esc(s) + '">').join('') + '</datalist>' +
+    '<div class="hint deskonly">วันที่และเวลาจะบันทึกตามจริงตอนกดเซฟ · ร้านที่เคยออกบิลแล้วจะจำอัตรา % ให้ · กด Enter เพื่อเลื่อนไปช่องถัดไป · Enter ที่ช่องสุดท้าย หรือ Ctrl+Enter ที่ช่องใดก็ได้ = เซฟและปริ๊นบิลทันที</div>' +
+    '</div></div>' +
+    '<div class="forms">' + draft.rates.map((_, i) => sectionHtml(i)).join('') + '</div>' +
+    (!draft.locked && draft.rates.length < MAX_FORMS ? '<button class="btn addform" data-action="form-add">+ เพิ่มฟอร์ม</button>' : '') +
+    '<div class="card"><div class="grand">' +
+    '<div class="stat fee"><div class="k">%รวม (ค่าบริการ)</div><div class="v" id="g-fee"></div></div>' +
+    '<div class="stat"><div class="k">ยอดรวม (มูลค่ารางวัล)</div><div class="v" id="g-total"></div></div>' +
+    '<div class="stat pay"><div class="k">ยอดลด%รวม (จ่ายลูกค้า)</div><div class="v" id="g-net"></div></div>' +
+    '</div></div>' +
+    '<div class="actionbar"><div class="paybar"><span>จ่ายลูกค้า</span><b id="bar-net"></b></div><div class="btns">' +
+    '<button class="btn' + (draft.locked ? ' primary' : '') + '" data-action="bill-new">บิลใหม่</button>' +
+    '<button class="btn' + (draft.locked ? '' : ' primary') + '" data-action="bill-save"' + dis + '>เซฟบิล</button>' +
+    '<button class="btn" data-action="bill-save-print"' + (saved && saved.void ? ' disabled' : '') + '>ปริ๊นบิล</button>' +
+    '<button class="btn" data-action="bill-edit"' + (draft.locked && saved && !saved.void ? '' : ' disabled') + '>แก้ไขบิล</button>' +
+    '</div></div>';
+  recalcDraft();
+};
+function recalcDraft() {
+  const r = calcBill(draft.prizes, draft.rates, draft.qtys);
+  r.sections.forEach((s, i) => {
+    s.rows.forEach((row, j) => { $('#sum-' + i + '-' + j).textContent = row.qty ? fmt(row.sum) : ''; });
+    $('#tot-' + i).textContent = fmt(s.total);
+    $('#ratelbl-' + i).textContent = s.rate;
+    $('#fee-' + i).textContent = fmt(s.fee);
+    $('#net-' + i).textContent = fmt(s.net);
+  });
+  $('#g-fee').textContent = fmt(r.fee);
+  $('#g-total').textContent = fmt(r.total);
+  $('#g-net').textContent = fmt(r.net);
+  $('#bar-net').textContent = fmt(r.net);
+  return r;
+}
+function printBill(bill) { openSheet(billSheetHtml(bill)); setTimeout(() => window.print(), 150); }
+// เซฟบิล (บิลใหม่ หรือบันทึกการแก้ไขบิลเดิม) — andPrint = ปริ๊นบิลต่อทันที
+function saveBill(andPrint) {
+  let bill = draft.no ? state.bills.find(b => b.no === draft.no) : null;
+  if (draft.locked) { if (andPrint && bill && !bill.void) printBill(bill); return; }   // เซฟแล้ว: ปริ๊นอย่างเดียว
+  const shop = draft.shop.trim();
+  if (!shop) { toast('กรุณาใส่ชื่อร้าน / ลูกค้า'); $('#shop').focus(); return; }
+  const r = calcBill(draft.prizes, draft.rates, draft.qtys);
+  if (r.total <= 0) { toast('ยังไม่ได้ใส่จำนวนสลาก'); return; }
+  const bal = round2(cashBalance() + (bill ? bill.net : 0));   // ถ้าแก้ไขบิล คืนยอดเดิมก่อนเทียบ
+  if (r.net > bal && !confirm('เงินสดในลิ้นชัก (' + fmt(bal) + ') ไม่พอจ่าย ' + fmt(r.net) + ' บาท\nต้องการบันทึกบิลต่อหรือไม่?')) return;
+  if (bill) {
+    Object.assign(bill, { shop, sections: r.sections, fee: r.fee, total: r.total, net: r.net, editedTs: Date.now(), editedBy: userLabel() });
+  } else {
+    state.seq += 1;
+    bill = {
+      no: 'B' + pad(state.seq, 6), ts: Date.now(), shop, cashier: userLabel(), user: currentUser ? currentUser.code : '',
+      sections: r.sections, fee: r.fee, total: r.total, net: r.net, void: false
+    };
+    state.bills.push(bill);
+  }
+  state.shops[shop] = { rates: draft.rates.slice() };
+  if (!saveState()) return;
+  loadBillToDraft(bill, true); RENDER.bill(); refreshTop();
+  toast((bill.editedTs ? 'บันทึกการแก้ไขบิล ' : 'เซฟบิล ') + bill.no + ' แล้ว');
+  if (andPrint) printBill(bill);
+}
+function editBill(no) {
+  if (no) {   // เปิดบิลเก่าจากประวัติมาแก้
+    const b = state.bills.find(x => x.no === no);
+    if (!b || b.void) return;
+    if (draft && draftHasWork() && draft.no !== no && !confirm('ฟอร์มออกบิลมีข้อมูลที่ยังไม่ได้เซฟ ต้องการทิ้งแล้วเปิดบิล ' + no + ' มาแก้ไขหรือไม่?')) return;
+    loadBillToDraft(b, false); showTab('bill');
+  } else if (draft.locked) { draft.locked = false; RENDER.bill(); }
+}
+
+/* ===================== ใบบิล / ใบสรุป (สำหรับพิมพ์) ===================== */
+function billSheetHtml(b) {
+  const sec = s =>
+    '<table><tr><th>%</th><th class="n">' + s.rate + '</th><th class="n">จำนวน</th><th class="n">ยอด</th></tr>' +
+    s.rows.map(r => '<tr><td>' + esc(r.name) + '</td><td class="n">' + fmt0(r.amount) + '</td><td class="n">' + (r.qty ? fmt0(r.qty) : '') + '</td><td class="n">' + (r.qty ? fmt(r.sum) : '') + '</td></tr>').join('') +
+    '<tr class="sum"><td colspan="3" class="n">รวม</td><td class="n">' + fmt(s.total) + '</td></tr>' +
+    '<tr class="sum"><td colspan="2" class="n">%</td><td class="n">' + s.rate + '</td><td class="n">' + fmt(s.fee) + '</td></tr>' +
+    '<tr class="sum"><td colspan="3" class="n">สรุป</td><td class="n">' + fmt(s.net) + '</td></tr></table>';
+  return (b.void ? '<div class="voidmark">ยกเลิก</div>' : '') +
+    '<div class="' + (b.sections.length > 2 ? 'compact' : '') + '">' +
+    '<h1>' + esc(state.settings.bizName) + '</h1><div class="sub">ใบรับขึ้นเงินรางวัล</div>' +
+    '<div class="meta"><div><b>ชื่อร้าน:</b> ' + esc(b.shop) + '</div><div><b>เลขที่:</b> ' + esc(b.no) + '</div>' +
+    '<div><b>วันที่:</b> ' + fmtDT(b.ts) + '</div><div><b>' + periodLabel(periodKey(b.ts)) + '</b></div></div>' +
+    b.sections.map(sec).join('') +
+    '<table class="final">' +
+    '<tr><td class="n">%รวม</td><td class="n" style="width:38%">' + fmt(b.fee) + '</td></tr>' +
+    '<tr><td class="n">ยอดรวม</td><td class="n">' + fmt(b.total) + '</td></tr>' +
+    '<tr class="pay"><td class="n">ยอดลด%รวม</td><td class="n">' + fmt(b.net) + '</td></tr></table>' +
+    (b.void ? '<div><b>ยกเลิกเมื่อ:</b> ' + fmtDT(b.voidTs) + ' — ' + esc(b.voidReason || '') + '</div>' : '') +
+    (b.editedTs ? '<div class="small">แก้ไขล่าสุด: ' + fmtDT(b.editedTs) + (b.editedBy ? ' โดย ' + esc(b.editedBy) : '') + '</div>' : '') +
+    '<div class="sign"><div>ผู้จ่ายเงิน' + (b.cashier ? ' (' + esc(b.cashier) + ')' : '') + '</div><div>ผู้รับเงิน</div></div></div>';
+}
+function openSheet(html) {
+  $('#sheet').innerHTML = html;
+  $('#modal').hidden = false;
+  document.body.classList.add('modal-open');
+  $('#modal').scrollTop = 0;
+}
+function closeSheet() { $('#modal').hidden = true; document.body.classList.remove('modal-open'); }
+
+/* ===================== 2) ลิ้นชักเงิน ===================== */
+RENDER.cash = function () {
+  const live = state.cash.filter(c => !c.void);
+  const cin = round2(live.filter(c => c.type !== 'ret').reduce((a, c) => a + c.amount, 0));
+  const cinCash = round2(live.filter(c => c.type !== 'ret').reduce((a, c) => a + cashPart(c), 0));
+  const cout = round2(live.filter(c => c.type === 'ret').reduce((a, c) => a + c.amount, 0));
+  const paid = round2(state.bills.filter(b => !b.void).reduce((a, b) => a + b.net, 0));
+  const bal = cashBalance();
+  // สมุดบัญชี: รายการเงินเข้า-ออก และการจ่ายตามบิล เรียงตามเวลา พร้อมยอดคงเหลือ
+  const entries = state.cash.map(c => ({ ts: c.ts, kind: 'cash', c }))
+    .concat(state.bills.filter(b => !b.void).map(b => ({ ts: b.ts, kind: 'bill', b })))
+    .sort((a, b) => a.ts - b.ts);
+  let run = 0;
+  const rows = entries.map(e => {
+    if (e.kind === 'bill') {
+      run = round2(run - e.b.net);
+      return '<tr><td>' + fmtDT(e.ts) + '</td><td>จ่ายตามบิล ' + esc(e.b.no) + ' — ' + esc(e.b.shop) + '</td><td class="n"></td><td class="n">' + fmt(e.b.net) + '</td><td class="n">' + fmt(run) + '</td><td class="c"><button class="btn small" data-action="bill-view" data-no="' + esc(e.b.no) + '">ดูบิล</button></td></tr>';
+    }
+    const c = e.c;
+    if (!c.void) run = round2(run + cashSign(c) * c.amount);
+    return '<tr class="' + (c.void ? 'void' : '') + '"><td>' + fmtDT(c.ts) + '</td><td>' + CASH_TYPES[c.type] + (c.person ? ' — ' + (c.type === 'ret' ? 'ให้ ' : 'รับจาก ') + esc(c.person) : '') + (c.note ? ' (' + esc(c.note) + ')' : '') +
+      '<div class="hint">' + esc(cashDetail(c)) + '</div></td>' +
+      '<td class="n">' + (c.type !== 'ret' ? fmt(c.amount) : '') + '</td><td class="n">' + (c.type === 'ret' ? fmt(c.amount) : '') + '</td><td class="n">' + (c.void ? '' : fmt(run)) + '</td>' +
+      '<td class="c keep">' + (c.void ? '<span class="tag void">ยกเลิก</span>' : '<button class="btn small danger" data-action="cash-void" data-id="' + esc(c.id) + '">ยกเลิก</button>') + '</td></tr>';
+  }).reverse().join('');
+  $('#tab-cash').innerHTML =
+    '<h2>ลิ้นชักเงิน (เงินตั้งต้น)</h2>' +
+    '<div class="stats">' +
+    '<div class="stat"><div class="k">รับเข้า — เงินสด</div><div class="v">' + fmt(cinCash) + '</div></div>' +
+    '<div class="stat"><div class="k">รับเข้า — เงินโอน</div><div class="v">' + fmt(round2(cin - cinCash)) + '</div></div>' +
+    '<div class="stat"><div class="k">คืนเงิน / นำออก</div><div class="v">' + fmt(cout) + '</div></div>' +
+    '<div class="stat"><div class="k">จ่ายลูกค้าแล้ว</div><div class="v">' + fmt(paid) + '</div></div>' +
+    '<div class="stat pay"><div class="k">เงินสดที่ควรเหลือ</div><div class="v">' + fmt(bal) + '</div></div>' +
+    '</div>' +
+    '<div class="grid2"><div class="card"><h3>บันทึกรับเงินเข้า / นำเงินออก</h3><div class="row">' +
+    '<label class="f">ประเภท<select id="cashType">' + Object.keys(CASH_TYPES).map(k => '<option value="' + k + '">' + CASH_TYPES[k] + '</option>').join('') + '</select></label>' +
+    '<label class="f" style="flex:1;min-width:150px">รับจากใคร (หรือส่งให้ใคร)<input type="text" id="cashPerson" autocomplete="off"></label>' +
+    '</div><p class="hint" style="margin:8px 0">วันที่และเวลาบันทึกอัตโนมัติตามจริงตอนกดบันทึก · ผู้บันทึก: ' + esc(userLabel() || '–') + '</p>' +
+    '<h3>1) เงินสด — นับแบงค์</h3><table class="denoms">' +
+    '<tr><th>แบงค์</th><th class="n">จำนวนใบ</th><th class="n">เป็นเงิน</th></tr>' +
+    DENOMS.map(d => '<tr><td>แบงค์ ' + fmt0(d) + '</td><td class="n"><input class="denom" type="number" min="0" step="1" inputmode="numeric" data-denom="' + d + '"></td><td class="n" id="dsum-' + d + '"></td></tr>').join('') +
+    '<tr class="sum"><td colspan="2" class="n">รวมเงินสด</td><td class="n" id="cashSumCash">0.00</td></tr></table>' +
+    '<h3 style="margin-top:14px">2) เงินโอน</h3><div class="row">' +
+    '<label class="f">จำนวนเงินโอน (บาท)<input type="number" id="cashTransfer" min="0" step="0.01" inputmode="decimal" style="width:170px"></label>' +
+    '<label class="f" style="flex:1;min-width:140px">หมายเหตุ<input type="text" id="cashNote"></label></div>' +
+    '<div class="row" style="margin-top:14px;align-items:stretch"><div class="stat pay" style="flex:1"><div class="k">รวมทั้งสิ้น (เงินสด + เงินโอน)</div><div class="v" id="cashSumTotal">0.00</div></div>' +
+    '<button class="btn primary" data-action="cash-add" style="min-width:110px">บันทึก</button></div></div>' +
+    '<div class="card"><h3>นับเงินจริง</h3><div class="row">' +
+    '<label class="f">เงินที่นับได้ (บาท)<input type="number" id="counted" min="0" step="0.01" style="width:170px"></label>' +
+    '<div class="stat" id="diffBox" style="flex:1"><div class="k">ส่วนต่าง (นับได้ − ควรเหลือ)</div><div class="v" id="diffVal">–</div></div>' +
+    '</div></div></div>' +
+    '<div class="card"><h3>สมุดบัญชีเงินสด</h3><div class="scroll"><table>' +
+    '<tr><th>วันที่ เวลา</th><th>รายการ</th><th class="n">เงินเข้า</th><th class="n">เงินออก</th><th class="n">คงเหลือ</th><th></th></tr>' +
+    (rows || '<tr><td colspan="6" class="c hint">ยังไม่มีรายการ — เริ่มจากบันทึก "เบิกเงินตั้งต้น"</td></tr>') +
+    '</table></div></div>';
+};
+// อ่านฟอร์มรับเงิน: จำนวนแบงค์แต่ละชนิด + เงินโอน
+function readCashForm() {
+  const notes = {};
+  $$('#tab-cash input.denom').forEach(el => { const n = Math.max(0, Math.floor(num(el.value))); if (n) notes[el.dataset.denom] = n; });
+  const cashAmt = DENOMS.reduce((a, d) => a + d * (notes[d] || 0), 0);
+  const transfer = Math.max(0, round2(num($('#cashTransfer').value)));
+  return { notes, cashAmt, transfer, amount: round2(cashAmt + transfer) };
+}
+function recalcCashForm() {
+  const f = readCashForm();
+  DENOMS.forEach(d => { $('#dsum-' + d).textContent = f.notes[d] ? fmt(d * f.notes[d]) : ''; });
+  $('#cashSumCash').textContent = fmt(f.cashAmt);
+  $('#cashSumTotal').textContent = fmt(f.amount);
+}
+function addCash() {
+  const f = readCashForm(), amount = f.amount;
+  const person = $('#cashPerson').value.trim();
+  if (!person) { toast('กรุณาใส่ว่ารับจากใคร'); $('#cashPerson').focus(); return; }
+  if (amount <= 0) { toast('กรุณาใส่จำนวนแบงค์ หรือจำนวนเงินโอน'); return; }
+  state.cash.push({
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), ts: Date.now(),
+    type: $('#cashType').value, amount, cashAmt: f.cashAmt, transfer: f.transfer, notes: f.notes, person, note: $('#cashNote').value.trim(), user: currentUser ? currentUser.code : '', void: false
+  });
+  if (!saveState()) return;
+  RENDER.cash(); refreshTop(); toast('บันทึกแล้ว');
+}
+
+/* ===================== 3) ประวัติบิล ===================== */
+let histFilter = { period: '', q: '', from: '', to: '' };
+// 'YYYY-MM-DD' -> เวลาเริ่มวันนั้น (เวลาท้องถิ่น); addDays=1 ใช้เป็นขอบบนของ "ถึงวันที่"
+function dayStart(s, addDays) { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d + (addDays || 0)).getTime(); }
+RENDER.history = function () {
+  $('#tab-history').innerHTML =
+    '<h2>ประวัติบิล</h2><div class="card"><div class="row">' +
+    '<label class="f">งวด<select id="histPeriod">' + periodOptions(histFilter.period, true) + '</select></label>' +
+    '<label class="f">วันที่เริ่มต้น<input type="date" id="histFrom" value="' + esc(histFilter.from) + '"></label>' +
+    '<label class="f">ถึงวันที่<input type="date" id="histTo" value="' + esc(histFilter.to) + '"></label>' +
+    '<button class="btn" data-action="hist-clear">ล้างตัวกรอง</button>' +
+    '<label class="f" style="flex:1;min-width:200px">ค้นหา (ชื่อร้าน / เลขที่บิล)<input type="text" id="histQ" value="' + esc(histFilter.q) + '"></label>' +
+    '</div></div><div class="card"><div class="scroll" id="histTable"></div></div>';
+  renderHistTable();
+};
+function renderHistTable() {
+  const q = histFilter.q.trim().toLowerCase();
+  const from = histFilter.from ? dayStart(histFilter.from) : -Infinity;
+  const to = histFilter.to ? dayStart(histFilter.to, 1) : Infinity;   // รวมทั้งวันของ "ถึงวันที่"
+  const list = state.bills.filter(b =>
+    (!histFilter.period || periodKey(b.ts) === histFilter.period) &&
+    b.ts >= from && b.ts < to &&
+    (!q || b.shop.toLowerCase().includes(q) || b.no.toLowerCase().includes(q))).slice().reverse();
+  const live = list.filter(b => !b.void);
+  const sum = k => fmt(live.reduce((a, b) => a + b[k], 0));
+  $('#histTable').innerHTML = '<table>' +
+    '<tr><th>เลขที่</th><th>วันที่ เวลา</th><th>ชื่อร้าน</th><th class="n">ยอดรวม</th><th class="n">%รวม</th><th class="n">ยอดลด%รวม</th><th class="c">สถานะ</th><th></th></tr>' +
+    (list.map(b => '<tr class="' + (b.void ? 'void' : '') + '"><td>' + esc(b.no) + '</td><td>' + fmtDT(b.ts) + '</td><td>' + esc(b.shop) + '</td>' +
+      '<td class="n">' + fmt(b.total) + '</td><td class="n">' + fmt(b.fee) + '</td><td class="n">' + fmt(b.net) + '</td>' +
+      '<td class="c keep">' + (b.void ? '<span class="tag void">ยกเลิก</span>' : '<span class="tag ok">ปกติ</span>') + '</td>' +
+      '<td class="c keep"><button class="btn small" data-action="bill-view" data-no="' + esc(b.no) + '">ดู / พิมพ์</button> ' +
+      (b.void ? '' : '<button class="btn small" data-action="bill-edit" data-no="' + esc(b.no) + '">แก้ไข</button> <button class="btn small danger" data-action="bill-void" data-no="' + esc(b.no) + '">ยกเลิก</button>') + '</td></tr>').join('') ||
+      '<tr><td colspan="8" class="c hint">ไม่พบบิล</td></tr>') +
+    '<tr class="sum"><td colspan="3" class="n">รวม ' + live.length + ' บิล (ไม่นับที่ยกเลิก)</td><td class="n">' + sum('total') + '</td><td class="n">' + sum('fee') + '</td><td class="n">' + sum('net') + '</td><td colspan="2"></td></tr></table>';
+}
+function voidBill(no) {
+  const b = state.bills.find(x => x.no === no);
+  if (!b || b.void) return;
+  const reason = prompt('ยกเลิกบิล ' + b.no + ' (' + b.shop + ' ' + fmt(b.net) + ' บาท)\nกรุณาระบุเหตุผล:');
+  if (reason === null) return;
+  b.void = true; b.voidTs = Date.now(); b.voidReason = reason.trim();
+  if (!saveState()) return;
+  if (draft && draft.no === no) newDraft();
+  RENDER[currentTab](); refreshTop(); toast('ยกเลิกบิล ' + b.no + ' แล้ว');
+}
+
+/* ===================== 4) สรุปงวด ===================== */
+let periodSel = null;
+function summarize(key) {
+  const { start, end } = periodRange(key);
+  const inP = x => x.ts >= start && x.ts < end;
+  const allBills = state.bills.filter(inP);
+  const bills = allBills.filter(b => !b.void);
+  const prizes = new Map(), rates = new Map(), shops = new Map();
+  bills.forEach(b => {
+    b.sections.forEach(s => {
+      if (s.total > 0) {
+        const r = rates.get(s.rate) || { rate: s.rate, total: 0, fee: 0, net: 0 };
+        r.total += s.total; r.fee += s.fee; r.net += s.net; rates.set(s.rate, r);
+      }
+      s.rows.forEach(row => {
+        if (!row.qty) return;
+        const k = row.name + '|' + row.amount;
+        const p = prizes.get(k) || { name: row.name, amount: row.amount, qty: 0, sum: 0 };
+        p.qty += row.qty; p.sum += row.sum; prizes.set(k, p);
+      });
+    });
+    const sh = shops.get(b.shop) || { shop: b.shop, count: 0, total: 0, fee: 0, net: 0 };
+    sh.count += 1; sh.total += b.total; sh.fee += b.fee; sh.net += b.net; shops.set(b.shop, sh);
+  });
+  const cash = state.cash.filter(c => inP(c) && !c.void);
+  const S = (arr, k) => round2(arr.reduce((a, x) => a + x[k], 0));
+  const opening = cashBalance(start);
+  const cashIn = cash.filter(c => c.type !== 'ret'), cashOut = cash.filter(c => c.type === 'ret');
+  const cin = S(cashIn, 'amount'), cout = S(cashOut, 'amount');
+  const cinCash = round2(cashIn.reduce((a, c) => a + cashPart(c), 0));
+  const total = S(bills, 'total'), fee = S(bills, 'fee'), net = S(bills, 'net');
+  return {
+    key, bills, voided: allBills.length - bills.length, total, fee, net,
+    tickets: [...prizes.values()].reduce((a, p) => a + p.qty, 0),
+    prizes: [...prizes.values()].sort((a, b) => a.amount - b.amount),
+    rates: [...rates.values()].sort((a, b) => a.rate - b.rate),
+    shops: [...shops.values()].sort((a, b) => b.total - a.total),
+    opening, cin, cout, closing: round2(opening + cin - cout - net),
+    cashIn, cashOut, cinCash, cinTransfer: round2(cin - cinCash)
+  };
+}
+// ตารางรายการรับเงิน/นำเงินออก สำหรับรีพอร์ต: วันที่ รับจากใคร จำนวนแบงค์ เงินสด เงินโอน
+function cashTableHtml(list, whoLabel) {
+  if (!list.length) return '<p class="hint">ไม่มีรายการ</p>';
+  const tot = { cash: 0, tr: 0, all: 0 }, cnt = {};
+  const rows = list.slice().sort((a, b) => a.ts - b.ts).map(c => {
+    tot.cash += cashPart(c); tot.tr += transferPart(c); tot.all += c.amount;
+    DENOMS.forEach(d => { cnt[d] = (cnt[d] || 0) + ((c.notes && c.notes[d]) || 0); });
+    return '<tr><td>' + fmtDT(c.ts) + '</td><td>' + CASH_TYPES[c.type] + '</td><td>' + esc(c.person || '–') + (c.note ? ' <span style="font-size:.85em">(' + esc(c.note) + ')</span>' : '') + '</td>' +
+      DENOMS.map(d => '<td class="n">' + ((c.notes && c.notes[d]) ? fmt0(c.notes[d]) : '') + '</td>').join('') +
+      '<td class="n">' + fmt(cashPart(c)) + '</td><td class="n">' + fmt(transferPart(c)) + '</td><td class="n">' + fmt(c.amount) + '</td></tr>';
+  }).join('');
+  return '<div class="scroll"><table><tr><th>วันที่ เวลา</th><th>ประเภท</th><th>' + whoLabel + '</th>' +
+    DENOMS.map(d => '<th class="n">' + fmt0(d) + '</th>').join('') + '<th class="n">เงินสด</th><th class="n">เงินโอน</th><th class="n">รวม</th></tr>' + rows +
+    '<tr class="sum"><td colspan="3" class="n">รวม ' + list.length + ' รายการ</td>' + DENOMS.map(d => '<td class="n">' + (cnt[d] ? fmt0(cnt[d]) : '') + '</td>').join('') +
+    '<td class="n">' + fmt(round2(tot.cash)) + '</td><td class="n">' + fmt(round2(tot.tr)) + '</td><td class="n">' + fmt(round2(tot.all)) + '</td></tr></table></div>';
+}
+// แบบแคบสำหรับกระดาษกว้าง 10 ซม.: หนึ่งรายการต่อแถว รายละเอียดแบงค์อยู่บรรทัดล่าง
+function cashListNarrowHtml(list, whoLabel) {
+  if (!list.length) return '<p class="small">ไม่มีรายการ</p>';
+  const tot = { cash: 0, tr: 0, all: 0 }, cnt = {};
+  const rows = list.slice().sort((a, b) => a.ts - b.ts).map(c => {
+    tot.cash += cashPart(c); tot.tr += transferPart(c); tot.all += c.amount;
+    DENOMS.forEach(d => { cnt[d] = (cnt[d] || 0) + ((c.notes && c.notes[d]) || 0); });
+    const notes = DENOMS.filter(d => c.notes && c.notes[d]).map(d => fmt0(d) + '×' + fmt0(c.notes[d])).join(' ');
+    return '<tr><td>' + fmtDT(c.ts) + ' · ' + CASH_TYPES[c.type] + '<br><b>' + whoLabel + ' ' + esc(c.person || '–') + '</b>' + (c.note ? ' (' + esc(c.note) + ')' : '') +
+      '<div class="small">เงินสด ' + fmt(cashPart(c)) + (notes ? ' (' + notes + ')' : '') + '<br>เงินโอน ' + fmt(transferPart(c)) + '</div></td>' +
+      '<td class="n"><b>' + fmt(c.amount) + '</b></td></tr>';
+  }).join('');
+  const cntTxt = DENOMS.filter(d => cnt[d]).map(d => fmt0(d) + '×' + fmt0(cnt[d])).join(' ');
+  return '<table><tr><th>รายการ</th><th class="n">รวม</th></tr>' + rows +
+    '<tr class="sum"><td>รวมเงินสด' + (cntTxt ? '<div class="small">' + cntTxt + '</div>' : '') + '</td><td class="n">' + fmt(round2(tot.cash)) + '</td></tr>' +
+    '<tr class="sum"><td>รวมเงินโอน</td><td class="n">' + fmt(round2(tot.tr)) + '</td></tr>' +
+    '<tr class="sum"><td>รวม ' + list.length + ' รายการ</td><td class="n">' + fmt(round2(tot.all)) + '</td></tr></table>';
+}
+function periodBodyHtml(s, narrow) {
+  const cashTbl = narrow ? cashListNarrowHtml : cashTableHtml;
+  const r2 = x => fmt(round2(x));
+  return '<h3>กระทบยอดเงินสด</h3><table>' +
+    '<tr><td>เงินสดยกมาจากงวดก่อน</td><td class="n">' + fmt(s.opening) + '</td></tr>' +
+    '<tr><td>บวก รับเงินเข้า — เงินสด</td><td class="n">' + fmt(s.cinCash) + '</td></tr>' +
+    '<tr><td>บวก รับเงินเข้า — เงินโอน</td><td class="n">' + fmt(s.cinTransfer) + '</td></tr>' +
+    '<tr><td>หัก คืนเงิน / นำเงินออก</td><td class="n">' + fmt(s.cout) + '</td></tr>' +
+    '<tr><td>หัก จ่ายลูกค้า (ยอดลด%รวม)</td><td class="n">' + fmt(s.net) + '</td></tr>' +
+    '<tr class="sum"><td>เงินสดที่ควรเหลือสิ้นงวด</td><td class="n">' + fmt(s.closing) + '</td></tr>' +
+    '<tr><td>มูลค่าสลากที่รับไว้ (ยอดรวม)<br><span style="font-size:.85em">= จ่ายลูกค้า ' + fmt(s.net) + ' + ค่าบริการ ' + fmt(s.fee) + '</span></td><td class="n">' + fmt(s.total) + '</td></tr></table>' +
+    '<h3 style="margin-top:14px">รายการรับเงินเข้า (จำนวนแบงค์ / เงินโอน)</h3>' + cashTbl(s.cashIn, 'รับจาก') +
+    (s.cashOut.length ? '<h3 style="margin-top:14px">รายการคืนเงิน / นำเงินออก</h3>' + cashTbl(s.cashOut, 'ส่งให้') : '') +
+    '<h3 style="margin-top:14px">แยกตามอัตรา %</h3><table><tr><th>อัตรา %</th><th class="n">รวม</th><th class="n">%</th><th class="n">สรุป</th></tr>' +
+    (s.rates.map(r => '<tr><td>' + r.rate + '</td><td class="n">' + r2(r.total) + '</td><td class="n">' + r2(r.fee) + '</td><td class="n">' + r2(r.net) + '</td></tr>').join('') || '<tr><td colspan="4" class="c">–</td></tr>') +
+    '<tr class="sum"><td>รวม</td><td class="n">' + fmt(s.total) + '</td><td class="n">' + fmt(s.fee) + '</td><td class="n">' + fmt(s.net) + '</td></tr></table>' +
+    '<h3 style="margin-top:14px">แยกตามรางวัล</h3><table><tr><th>รางวัล</th><th class="n">เงินรางวัล/ใบ</th><th class="n">จำนวนใบ</th><th class="n">มูลค่า</th></tr>' +
+    (s.prizes.map(p => '<tr><td>' + esc(p.name) + '</td><td class="n">' + fmt0(p.amount) + '</td><td class="n">' + fmt0(p.qty) + '</td><td class="n">' + fmt(p.sum) + '</td></tr>').join('') || '<tr><td colspan="4" class="c">–</td></tr>') +
+    '<tr class="sum"><td colspan="2">รวม</td><td class="n">' + fmt0(s.tickets) + '</td><td class="n">' + fmt(s.total) + '</td></tr></table>' +
+    '<h3 style="margin-top:14px">แยกตามร้าน</h3><table><tr><th>ชื่อร้าน</th><th class="n">จำนวนบิล</th><th class="n">ยอดรวม</th><th class="n">%รวม</th><th class="n">ยอดลด%รวม</th></tr>' +
+    (s.shops.map(x => '<tr><td>' + esc(x.shop) + '</td><td class="n">' + x.count + '</td><td class="n">' + r2(x.total) + '</td><td class="n">' + r2(x.fee) + '</td><td class="n">' + r2(x.net) + '</td></tr>').join('') || '<tr><td colspan="5" class="c">–</td></tr>') +
+    '<tr class="sum"><td>รวม</td><td class="n">' + s.bills.length + '</td><td class="n">' + fmt(s.total) + '</td><td class="n">' + fmt(s.fee) + '</td><td class="n">' + fmt(s.net) + '</td></tr></table>';
+}
+RENDER.period = function () {
+  if (!periodSel || !allPeriods().includes(periodSel)) periodSel = periodKey(Date.now());
+  const s = summarize(periodSel);
+  $('#tab-period').innerHTML =
+    '<h2>สรุปงวด</h2><div class="card"><div class="row">' +
+    '<label class="f">เลือกงวด<select id="periodSel">' + periodOptions(periodSel, false) + '</select></label>' +
+    '<button class="btn primary" data-action="period-print">พิมพ์ใบสรุปงวด</button>' +
+    '<button class="btn" data-action="period-csv">ส่งออกรายการบิล (CSV เปิดใน Excel)</button>' +
+    '</div></div>' +
+    '<div class="stats">' +
+    '<div class="stat"><div class="k">จำนวนบิล' + (s.voided ? ' (ยกเลิก ' + s.voided + ')' : '') + '</div><div class="v">' + s.bills.length + '</div></div>' +
+    '<div class="stat"><div class="k">จำนวนสลาก (ใบ)</div><div class="v">' + fmt0(s.tickets) + '</div></div>' +
+    '<div class="stat"><div class="k">ยอดรวม</div><div class="v">' + fmt(s.total) + '</div></div>' +
+    '<div class="stat fee"><div class="k">%รวม (รายได้ค่าบริการ)</div><div class="v">' + fmt(s.fee) + '</div></div>' +
+    '<div class="stat pay"><div class="k">ยอดลด%รวม (จ่ายลูกค้า)</div><div class="v">' + fmt(s.net) + '</div></div>' +
+    '</div><div class="card">' + periodBodyHtml(s) + '</div>';
+};
+function printPeriod() {
+  const s = summarize(periodSel);
+  openSheet('<h1>' + esc(state.settings.bizName) + '</h1><div class="sub">ใบสรุป' + periodLabel(s.key) + '</div>' +
+    '<div class="meta one"><div><b>จำนวนบิล:</b> ' + s.bills.length + (s.voided ? ' (ยกเลิก ' + s.voided + ')' : '') + ' · <b>สลาก:</b> ' + fmt0(s.tickets) + ' ใบ</div><div><b>พิมพ์เมื่อ:</b> ' + fmtDT(Date.now()) + '</div></div>' +
+    '<div class="rep">' + periodBodyHtml(s, true) + '</div><div class="sign"><div>ผู้จัดทำ</div><div>ผู้ตรวจสอบ</div></div>');
+}
+function exportCsv() {
+  const { start, end } = periodRange(periodSel);
+  const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  const bills = state.bills.filter(b => b.ts >= start && b.ts < end);
+  const n = Math.max(2, ...bills.map(b => b.sections.length));   // จำนวนฟอร์มมากที่สุดในงวด
+  const head = ['เลขที่', 'วันที่', 'เวลา', 'ชื่อร้าน'];
+  for (let i = 1; i <= n; i++) head.push('อัตรา' + i, 'รวม' + i, '%' + i, 'สรุป' + i);
+  head.push('%รวม', 'ยอดรวม', 'ยอดลด%รวม', 'สถานะ', 'เหตุผลยกเลิก');
+  const lines = [head.map(q).join(',')];
+  bills.forEach(b => {
+    const row = [b.no, fmtDate(b.ts), fmtTime(b.ts), b.shop];
+    for (let i = 0; i < n; i++) { const s = b.sections[i]; row.push(...(s ? [s.rate, s.total, s.fee, s.net] : ['', '', '', ''])); }
+    row.push(b.fee, b.total, b.net, b.void ? 'ยกเลิก' : 'ปกติ', b.voidReason || '');
+    lines.push(row.map(q).join(','));
+  });
+  download('บิล-' + periodSel + '.csv', '﻿' + lines.join('\r\n'), 'text/csv;charset=utf-8');
+}
+function download(name, text, type) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type }));
+  a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+/* ===================== 5) ตั้งค่า ===================== */
+function prizeRowHtml(p) {
+  return '<tr><td><input type="text" class="pName" value="' + esc(p.name) + '" style="width:100%"></td>' +
+    '<td><input type="number" class="pAmount" min="0" step="1" value="' + p.amount + '" style="width:100%;text-align:right"></td>' +
+    '<td class="c"><button class="btn small" data-action="prize-up">▲</button> <button class="btn small" data-action="prize-down">▼</button> <button class="btn small danger" data-action="prize-del">ลบ</button></td></tr>';
+}
+RENDER.settings = function () {
+  const s = state.settings;
+  $('#tab-settings').innerHTML =
+    '<h2>ตั้งค่า</h2><div class="grid2"><div>' +
+    '<div class="card"><h3>ข้อมูลร้าน</h3><div class="row">' +
+    '<label class="f" style="flex:1;min-width:200px">ชื่อกิจการ (หัวบิล)<input type="text" id="setBiz" value="' + esc(s.bizName) + '"></label>' +
+    '</div>' +
+    '<div class="row" style="margin-top:12px">' +
+    [0, 1, 2].map(i => '<label class="f">อัตรา % ฟอร์มที่ ' + (i + 1) + (i === 2 ? ' (ฟอร์มที่กดเพิ่ม)' : '') + '<input type="number" id="setRate' + i + '" step="0.01" min="0" inputmode="decimal" value="' + defaultRate(i) + '" style="width:130px"></label>').join('') +
+    '</div></div>' +
+    '<div class="card"><h3>สำรอง / กู้คืนข้อมูล</h3><p class="hint">ข้อมูลทั้งหมดเก็บอยู่ในเบราว์เซอร์ของเครื่องนี้เท่านั้น ควรสำรองไฟล์ไว้ทุกวัน หากล้างข้อมูลเบราว์เซอร์ ข้อมูลจะหาย</p><div class="row">' +
+    '<button class="btn primary" data-action="backup">สำรองข้อมูล (ดาวน์โหลดไฟล์)</button>' +
+    '<button class="btn" data-action="restore">กู้คืนจากไฟล์สำรอง</button>' +
+    '<input type="file" id="restoreFile" accept=".json,application/json" hidden>' +
+    '<button class="btn danger" data-action="wipe">ล้างข้อมูลทั้งหมด</button></div></div>' +
+    '<div class="card"><h3>ผู้ใช้งาน</h3><div class="scroll"><table><tr><th>รหัส</th><th>ชื่อเล่น</th><th>เบอร์โทร</th><th>วันที่สมัคร</th></tr>' +
+    (state.users.map(u => '<tr><td>' + esc(u.code) + '</td><td>' + esc(u.nick) + '</td><td>' + esc(u.phone || '–') + '</td><td>' + fmtDT(u.ts) + '</td></tr>').join('') || '<tr><td colspan="4" class="c hint">ยังไม่มีผู้ใช้</td></tr>') +
+    '</table></div><p class="hint">สมัครผู้ใช้ใหม่ได้ที่หน้าเข้าสู่ระบบ (กด "ออก" ที่มุมขวาบน แล้วกด "สมัคร")</p></div>' +
+    '</div><div class="card"><h3>รายการรางวัล</h3><table id="prizeTable"><tr><th>ชื่อรางวัล</th><th class="n" style="width:170px">เงินรางวัลต่อใบ</th><th style="width:170px"></th></tr>' +
+    s.prizes.map(prizeRowHtml).join('') + '</table>' +
+    '<div class="row" style="margin-top:10px"><button class="btn" data-action="prize-add">+ เพิ่มรางวัล</button></div>' +
+    '<p class="hint">การแก้ไขมีผลกับบิลใหม่เท่านั้น บิลเก่าเก็บราคา ณ วันที่ออกบิลไว้แล้ว</p></div></div>' +
+    '<div class="row" style="justify-content:flex-end"><button class="btn primary" data-action="settings-save">บันทึกการตั้งค่า</button></div>';
+};
+function saveSettings() {
+  const prizes = $$('#prizeTable tr').slice(1).map(tr => ({ name: $('.pName', tr).value.trim(), amount: num($('.pAmount', tr).value) }))
+    .filter(p => p.name);
+  if (!prizes.length) { toast('ต้องมีรางวัลอย่างน้อย 1 รายการ'); return; }
+  if (prizes.some(p => p.amount <= 0)) { toast('เงินรางวัลต่อใบต้องมากกว่า 0'); return; }
+  const s = state.settings;
+  s.bizName = $('#setBiz').value.trim() || 'รับขึ้นเงินล๊อตเตอรี่';
+  s.rates = [0, 1, 2].map(i => num($('#setRate' + i).value));
+  s.prizes = prizes;
+  if (!saveState()) return;
+  draft = null; refreshTop(); RENDER.settings(); toast('บันทึกการตั้งค่าแล้ว');
+}
+function restoreFrom(file) {
+  const fr = new FileReader();
+  fr.onload = () => {
+    try {
+      const d = JSON.parse(fr.result);
+      if (!d || !d.settings || !Array.isArray(d.settings.prizes) || !Array.isArray(d.bills) || !Array.isArray(d.cash)) throw new Error('ไฟล์นี้ไม่ใช่ไฟล์สำรองของโปรแกรม');
+      if (!confirm('กู้คืนข้อมูลจากไฟล์นี้ (' + d.bills.length + ' บิล)?\nข้อมูลปัจจุบันในเครื่อง (' + state.bills.length + ' บิล) จะถูกแทนที่ทั้งหมด')) return;
+      localStorage.setItem(STORE_KEY, JSON.stringify(d));
+      state = loadState(); draft = null; refreshTop(); currentTab = 'history'; applyAuth(); toast('กู้คืนข้อมูลแล้ว');
+    } catch (e) { alert('กู้คืนไม่สำเร็จ: ' + e.message); }
+  };
+  fr.readAsText(file);
+}
+
+/* ===================== เหตุการณ์ ===================== */
+const ACTIONS = {
+  'print': () => window.print(),
+  'close-modal': closeSheet,
+  'bill-new': () => {
+    if (draftHasWork() && !confirm('ข้อมูลในฟอร์มยังไม่ได้เซฟ ต้องการทิ้งแล้วเริ่มบิลใหม่หรือไม่?')) return;
+    newDraft(); RENDER.bill(); window.scrollTo(0, 0);
+  },
+  'bill-save': () => saveBill(false),
+  'bill-save-print': () => saveBill(true),
+  'bill-edit': t => editBill(t.dataset.no),
+  'form-add': () => {
+    if (draft.locked || draft.rates.length >= MAX_FORMS) return;
+    draft.rates.push(defaultRate(draft.rates.length)); draft.qtys.push([]); RENDER.bill();
+    const f = $$('.forms .card').pop(); if (f && f.scrollIntoView) f.scrollIntoView({ block: 'nearest' });
+  },
+  'form-del': t => {
+    const i = +t.dataset.i;
+    if (draft.locked || i < 2) return;
+    if (draft.qtys[i].some(v => v > 0) && !confirm('ลบฟอร์มที่ ' + (i + 1) + ' พร้อมจำนวนที่กรอกไว้?')) return;
+    draft.rates.splice(i, 1); draft.qtys.splice(i, 1); RENDER.bill();
+  },
+  'bill-view': t => { const b = state.bills.find(x => x.no === t.dataset.no); if (b) openSheet(billSheetHtml(b)); },
+  'bill-void': t => voidBill(t.dataset.no),
+  'hist-clear': () => { histFilter = { period: '', q: '', from: '', to: '' }; RENDER.history(); },
+  'cash-add': addCash,
+  'cash-void': t => {
+    const c = state.cash.find(x => x.id === t.dataset.id);
+    if (!c || !confirm('ยกเลิกรายการ ' + CASH_TYPES[c.type] + ' ' + fmt(c.amount) + ' บาท?')) return;
+    c.void = true; if (saveState()) { RENDER.cash(); refreshTop(); }
+  },
+  'period-print': printPeriod,
+  'period-csv': exportCsv,
+  'prize-add': () => { $('#prizeTable').insertAdjacentHTML('beforeend', prizeRowHtml({ name: '', amount: '' })); $$('#prizeTable .pName').pop().focus(); },
+  'prize-del': t => t.closest('tr').remove(),
+  'prize-up': t => { const tr = t.closest('tr'), prev = tr.previousElementSibling; if (prev && prev.previousElementSibling) prev.before(tr); },
+  'prize-down': t => { const tr = t.closest('tr'), next = tr.nextElementSibling; if (next) next.after(tr); },
+  'settings-save': saveSettings,
+  'backup': () => { const d = new Date(); download('สำรองข้อมูลขึ้นเงิน-' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '-' + pad(d.getHours()) + pad(d.getMinutes()) + '.json', JSON.stringify(state, null, 1), 'application/json'); },
+  'restore': () => $('#restoreFile').click(),
+  'wipe': () => {
+    if (prompt('การล้างข้อมูลจะลบบิลและรายการเงินทั้งหมด กู้คืนไม่ได้หากไม่มีไฟล์สำรอง\nพิมพ์คำว่า ลบ เพื่อยืนยัน') !== 'ลบ') return;
+    localStorage.removeItem(STORE_KEY); state = loadState(); draft = null; refreshTop(); currentTab = 'bill'; applyAuth(); toast('ล้างข้อมูลแล้ว');
+  },
+  'auth-login': login,
+  'auth-signup': signup,
+  'auth-show-signup': () => { authView = 'signup'; renderAuth(); $('#suNick').focus(); },
+  'auth-show-login': () => { authView = 'login'; renderAuth(); },
+  'logout': logout
+};
+document.addEventListener('click', e => {
+  const tab = e.target.closest('#tabs button');
+  if (tab) { showTab(tab.dataset.tab); return; }
+  const t = e.target.closest('[data-action]');
+  if (t && ACTIONS[t.dataset.action]) ACTIONS[t.dataset.action](t);
+});
+document.addEventListener('input', e => {
+  const t = e.target;
+  if (t.classList.contains('qty')) {
+    draft.qtys[+t.dataset.sec][+t.dataset.row] = Math.max(0, Math.floor(num(t.value)));
+    recalcDraft();
+  } else if (t.classList.contains('rate')) {
+    draft.rates[+t.dataset.rate] = Math.max(0, num(t.value)); recalcDraft();
+  } else if (t.id === 'shop') {
+    draft.shop = t.value;
+    const known = state.shops[t.value.trim()];
+    if (known && !draft.no) {   // จำอัตรา % ของร้าน (เฉพาะบิลใหม่ และเฉพาะฟอร์มที่เปิดอยู่)
+      known.rates.forEach((v, i) => { if (i < draft.rates.length) draft.rates[i] = v; });
+      $$('input.rate').forEach((r, i) => { r.value = draft.rates[i]; }); recalcDraft();
+    }
+  } else if (t.id === 'histQ') { histFilter.q = t.value; renderHistTable(); }
+  else if (t.classList.contains('denom') || t.id === 'cashTransfer') { recalcCashForm(); }
+  else if (t.id === 'counted') {
+    const box = $('#diffBox'), v = $('#diffVal');
+    if (t.value === '') { v.textContent = '–'; box.classList.remove('bad', 'pay'); return; }
+    const diff = round2(num(t.value) - cashBalance());
+    v.textContent = (diff > 0 ? '+' : '') + fmt(diff) + (diff === 0 ? ' ตรง' : diff > 0 ? ' (เกิน)' : ' (ขาด)');
+    box.classList.toggle('bad', diff !== 0); box.classList.toggle('pay', diff === 0);
+  }
+});
+document.addEventListener('change', e => {
+  const t = e.target;
+  if (t.id === 'histPeriod') { histFilter.period = t.value; renderHistTable(); }
+  else if (t.id === 'histFrom' || t.id === 'histTo') {
+    histFilter[t.id === 'histFrom' ? 'from' : 'to'] = t.value;
+    if (histFilter.from && histFilter.to && histFilter.from > histFilter.to) toast('วันที่เริ่มต้นอยู่หลัง "ถึงวันที่"');
+    renderHistTable();
+  }
+  else if (t.id === 'periodSel') { periodSel = t.value; RENDER.period(); }
+  else if (t.id === 'restoreFile' && t.files[0]) { restoreFrom(t.files[0]); t.value = ''; }
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && !$('#modal').hidden) { closeSheet(); return; }
+  if (e.key === 'Enter' && !e.repeat && e.target.matches('#auth input')) {
+    e.preventDefault();
+    if (e.target.id === 'liCode') login();
+    else if (e.target.id === 'suNick') $('#suPhone').focus();
+    else if (e.target.id === 'suPhone') signup();
+    return;
+  }
+  if (e.key === 'Enter' && e.target.matches('#tab-bill input')) {
+    e.preventDefault();
+    if (e.repeat || !$('#modal').hidden || draft.locked) return;   // กันกดค้างแล้วบันทึกซ้ำ
+    const inputs = $$('#tab-bill #shop, #tab-bill input.qty');
+    const at = inputs.indexOf(e.target);
+    // Ctrl+Enter ที่ช่องใดก็ได้ หรือ Enter ที่ช่องสุดท้าย = บันทึกและพิมพ์บิลทันที
+    if (e.ctrlKey || at === inputs.length - 1) { e.target.blur(); saveBill(true); return; }
+    const next = at < 0 ? null : inputs[at + 1];
+    if (next) { next.focus(); next.select(); }
+  }
+});
+
+refreshTop(); tick(); setInterval(tick, 1000); applyAuth();
+</script>
+<!-- ส่งสำเนาข้อมูลให้ตัวรายงาน LINE บนเครื่องนี้ (โฟลเดอร์ line-report) ถ้าตัวรายงานไม่ได้เปิด บรรทัดนี้ไม่มีผลอะไร โปรแกรมใช้ได้ตามปกติ -->
+<script src="http://127.0.0.1:8787/sync.js" async></script>
+</body>
+</html>
