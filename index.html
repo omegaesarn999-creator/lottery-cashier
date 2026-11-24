@@ -940,7 +940,9 @@ function cloudPayload() {
     biz: state.settings.bizName,
     bills: state.bills.map(b => ({
       no: b.no, ts: b.ts, shop: b.shop, cashier: b.cashier, fee: b.fee, total: b.total, net: b.net, void: !!b.void,
-      tk: (b.sections || []).reduce((a, s) => a + (s.rows || []).reduce((x, r) => x + (r.qty || 0), 0), 0)
+      tk: (b.sections || []).reduce((a, s) => a + (s.rows || []).reduce((x, r) => x + (r.qty || 0), 0), 0),
+      // รายละเอียดแต่ละฟอร์ม: อัตราลด, ยอดรวม, และ [เงินรางวัล, จำนวนใบ, ชื่อรางวัล] เฉพาะแถวที่มีจำนวน
+      sec: (b.sections || []).map(s => ({ r: s.rate, t: s.total, f: s.fee, rows: (s.rows || []).filter(r => r.qty > 0).map(r => [r.amount, r.qty, r.name]) }))
     })),
     cash: state.cash.map(c => ({ id: c.id, ts: c.ts, type: c.type, amount: c.amount, void: !!c.void }))
   };
