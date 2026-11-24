@@ -367,7 +367,7 @@ function applyAuth() {
   const code = localStorage.getItem(SESSION_KEY);
   currentUser = state.users.find(u => u.code === code) || null;
   document.body.classList.toggle('logged-out', !currentUser);
-  $('#userBox').innerHTML = currentUser ? 'ผู้ใช้: <b>' + esc(currentUser.nick) + '</b> (' + esc(currentUser.code) + ')<button class="btn small" data-action="logout">ออก</button>' : '';
+  $('#userBox').innerHTML = currentUser ? 'ผู้ใช้: <b>' + esc(currentUser.nick) + '</b> (' + esc(currentUser.code) + (isAdmin(currentUser) ? ' · ผู้ดูแล' : '') + ')<button class="btn small" data-action="logout">ออก</button>' : '';
   if (currentUser) showTab(currentTab); else { authView = 'login'; renderAuth(); }
 }
 function login() {
@@ -817,8 +817,41 @@ function prizeRowHtml(p) {
     '<td><input type="number" class="pAmount" min="0" step="1" value="' + p.amount + '" style="width:100%;text-align:right"></td>' +
     '<td class="c"><button class="btn small" data-action="prize-up">▲</button> <button class="btn small" data-action="prize-down">▼</button> <button class="btn small danger" data-action="prize-del">ลบ</button></td></tr>';
 }
+// ผู้ดูแล: ผู้ใช้ที่ถูกตั้งเป็นผู้ดูแล ; ถ้ายังไม่มีใครถูกตั้งเลย ให้ผู้ใช้คนแรกที่สมัครเป็นผู้ดูแล
+function isAdmin(u) {
+  if (!u) return false;
+  if (!state.users.some(x => x.admin)) return state.users.length > 0 && state.users.slice().sort((a, b) => a.ts - b.ts)[0].code === u.code;
+  return !!state.users.find(x => x.code === u.code && x.admin);
+}
+function adminAdd() {
+  const nick = $('#adNick').value.trim(), phone = $('#adPhone').value.trim();
+  if (!nick) { toast('กรุณาใส่ชื่อเล่นของผู้ดูแลใหม่'); $('#adNick').focus(); return; }
+  if (phone && !/^[0-9+\- ]{9,15}$/.test(phone)) { toast('เบอร์โทรไม่ถูกต้อง'); $('#adPhone').focus(); return; }
+  state.users.forEach(u => { if (isAdmin(u)) u._keep = true; });      // คงสิทธิ์ผู้ดูแลคนแรกไว้เมื่อเริ่มมีการตั้งผู้ดูแล
+  state.users.forEach(u => { if (u._keep) { u.admin = true; delete u._keep; } });
+  const code = nextUserCode();
+  state.userSeq = (state.userSeq || 0) + 1;
+  state.users.push({ code, nick, phone, ts: Date.now(), admin: true });
+  if (!saveState()) return;
+  RENDER.settings(); toast('เพิ่มผู้ดูแลแล้ว รหัสเข้าใช้คือ ' + code);
+}
+function adminToggle(code) {
+  const u = state.users.find(x => x.code === code); if (!u) return;
+  const was = isAdmin(u), admins = state.users.filter(isAdmin);
+  if (was && admins.length <= 1) { toast('ต้องมีผู้ดูแลอย่างน้อย 1 คน'); return; }
+  if (!confirm(was ? 'ยกเลิกสิทธิ์ผู้ดูแลของ ' + u.nick + ' (' + u.code + ')?' : 'ตั้ง ' + u.nick + ' (' + u.code + ') เป็นผู้ดูแล?\nผู้ดูแลเข้าแท็บตั้งค่าและจัดการผู้ดูแลคนอื่นได้')) return;
+  admins.forEach(a => { a.admin = true; });
+  u.admin = !was;
+  if (!saveState()) return;
+  applyAuth(); toast(was ? 'ยกเลิกสิทธิ์ผู้ดูแลแล้ว' : 'ตั้งเป็นผู้ดูแลแล้ว');
+}
 RENDER.settings = function () {
   const s = state.settings;
+  if (!isAdmin(currentUser)) {
+    const names = state.users.filter(isAdmin).map(u => esc(u.nick) + ' (' + esc(u.code) + ')').join(', ');
+    $('#tab-settings').innerHTML = '<h2>ตั้งค่า</h2><div class="card"><h3>เฉพาะผู้ดูแล</h3><p class="hint">หน้านี้เปิดได้เฉพาะผู้ดูแล' + (names ? ': ' + names : '') + ' — ให้ผู้ดูแลเข้าสู่ระบบแล้วกด "ตั้งเป็นผู้ดูแล" ให้คุณในหัวข้อผู้ใช้งานและผู้ดูแล</p></div>';
+    return;
+  }
   $('#tab-settings').innerHTML =
     '<h2>ตั้งค่า</h2><div class="grid2"><div>' +
     '<div class="card"><h3>ข้อมูลร้าน</h3><div class="row">' +
@@ -833,9 +866,15 @@ RENDER.settings = function () {
     '<input type="file" id="restoreFile" accept=".json,application/json" hidden>' +
     '<button class="btn danger" data-action="wipe">ล้างข้อมูลทั้งหมด</button></div></div>' +
     cloudCardHtml() +
-    '<div class="card"><h3>ผู้ใช้งาน</h3><div class="scroll"><table><tr><th>รหัส</th><th>ชื่อเล่น</th><th>เบอร์โทร</th><th>วันที่สมัคร</th></tr>' +
-    (state.users.map(u => '<tr><td>' + esc(u.code) + '</td><td>' + esc(u.nick) + '</td><td>' + esc(u.phone || '–') + '</td><td>' + fmtDT(u.ts) + '</td></tr>').join('') || '<tr><td colspan="4" class="c hint">ยังไม่มีผู้ใช้</td></tr>') +
-    '</table></div><p class="hint">สมัครผู้ใช้ใหม่ได้ที่หน้าเข้าสู่ระบบ (กด "ออก" ที่มุมขวาบน แล้วกด "สมัคร")</p></div>' +
+    '<div class="card"><h3>ผู้ใช้งานและผู้ดูแล</h3><div class="scroll"><table><tr><th>รหัส</th><th>ชื่อเล่น</th><th>เบอร์โทร</th><th>สิทธิ์</th><th>วันที่สมัคร</th><th></th></tr>' +
+    (state.users.map(u => '<tr><td>' + esc(u.code) + '</td><td>' + esc(u.nick) + '</td><td>' + esc(u.phone || '–') + '</td><td>' + (isAdmin(u) ? '<b>ผู้ดูแล</b>' : 'พนักงาน') + '</td><td>' + fmtDT(u.ts) + '</td>' +
+      '<td class="c"><button class="btn small' + (isAdmin(u) ? ' danger' : '') + '" data-action="admin-toggle" data-code="' + esc(u.code) + '">' + (isAdmin(u) ? 'ยกเลิกผู้ดูแล' : 'ตั้งเป็นผู้ดูแล') + '</button></td></tr>').join('') || '<tr><td colspan="6" class="c hint">ยังไม่มีผู้ใช้</td></tr>') +
+    '</table></div>' +
+    '<div class="row" style="margin-top:12px">' +
+    '<label class="f" style="flex:1;min-width:140px">ชื่อเล่นผู้ดูแลใหม่<input type="text" id="adNick" maxlength="30" autocomplete="off"></label>' +
+    '<label class="f" style="flex:1;min-width:140px">เบอร์โทร<input type="tel" id="adPhone" maxlength="15" inputmode="tel" autocomplete="off"></label>' +
+    '<button class="btn primary" data-action="admin-add" style="align-self:flex-end">+ เพิ่มผู้ดูแล</button></div>' +
+    '<p class="hint">ผู้ดูแลเข้าแท็บ "ตั้งค่า" ได้ (รางวัล อัตรา % สำรองข้อมูล คลาวด์/LINE และจัดการผู้ดูแล) ส่วนพนักงานใช้ได้เฉพาะออกบิล ลิ้นชักเงิน ประวัติบิล และสรุปงวด · พนักงานสมัครเองได้ที่หน้าเข้าสู่ระบบ</p></div>' +
     '</div><div class="card"><h3>รายการรางวัล</h3><table id="prizeTable"><tr><th>ชื่อรางวัล</th><th class="n" style="width:170px">เงินรางวัลต่อใบ</th><th style="width:170px"></th></tr>' +
     s.prizes.map(prizeRowHtml).join('') + '</table>' +
     '<div class="row" style="margin-top:10px"><button class="btn" data-action="prize-add">+ เพิ่มรางวัล</button></div>' +
@@ -1007,6 +1046,8 @@ setInterval(() => cloudSync(false), 5000);
 
 /* ===================== เหตุการณ์ ===================== */
 const ACTIONS = {
+  'admin-add': adminAdd,
+  'admin-toggle': t => adminToggle(t.dataset.code),
   'cloud-connect': cloudConnect,
   'cloud-line-save': cloudLineSave,
   'cloud-line-test': () => cloudLineSend('test'),
