@@ -944,7 +944,11 @@ function cloudPayload() {
       // รายละเอียดแต่ละฟอร์ม: อัตราลด, ยอดรวม, และ [เงินรางวัล, จำนวนใบ, ชื่อรางวัล] เฉพาะแถวที่มีจำนวน
       sec: (b.sections || []).map(s => ({ r: s.rate, t: s.total, f: s.fee, rows: (s.rows || []).filter(r => r.qty > 0).map(r => [r.amount, r.qty, r.name]) }))
     })),
-    cash: state.cash.map(c => ({ id: c.id, ts: c.ts, type: c.type, amount: c.amount, void: !!c.void }))
+    // รายการเงิน: ส่งรายละเอียดไปด้วย เพื่อให้บอทแจ้งเตือนในห้อง LINE ทุกครั้งที่มีการเติม/นำเงินออก
+    cash: state.cash.map(c => {
+      const u = state.users.find(x => x.code === c.user);
+      return { id: c.id, ts: c.ts, type: c.type, amount: c.amount, void: !!c.void, cashAmt: cashPart(c), transfer: transferPart(c), person: c.person || '', note: c.note || '', by: u ? u.nick + ' ' + u.code : (c.user || '') };
+    })
   };
 }
 function cloudStatusText() {
