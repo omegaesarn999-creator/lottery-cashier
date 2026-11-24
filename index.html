@@ -832,6 +832,7 @@ RENDER.settings = function () {
     '<button class="btn" data-action="restore">กู้คืนจากไฟล์สำรอง</button>' +
     '<input type="file" id="restoreFile" accept=".json,application/json" hidden>' +
     '<button class="btn danger" data-action="wipe">ล้างข้อมูลทั้งหมด</button></div></div>' +
+    cloudCardHtml() +
     '<div class="card"><h3>ผู้ใช้งาน</h3><div class="scroll"><table><tr><th>รหัส</th><th>ชื่อเล่น</th><th>เบอร์โทร</th><th>วันที่สมัคร</th></tr>' +
     (state.users.map(u => '<tr><td>' + esc(u.code) + '</td><td>' + esc(u.nick) + '</td><td>' + esc(u.phone || '–') + '</td><td>' + fmtDT(u.ts) + '</td></tr>').join('') || '<tr><td colspan="4" class="c hint">ยังไม่มีผู้ใช้</td></tr>') +
     '</table></div><p class="hint">สมัครผู้ใช้ใหม่ได้ที่หน้าเข้าสู่ระบบ (กด "ออก" ที่มุมขวาบน แล้วกด "สมัคร")</p></div>' +
@@ -840,6 +841,7 @@ RENDER.settings = function () {
     '<div class="row" style="margin-top:10px"><button class="btn" data-action="prize-add">+ เพิ่มรางวัล</button></div>' +
     '<p class="hint">การแก้ไขมีผลกับบิลใหม่เท่านั้น บิลเก่าเก็บราคา ณ วันที่ออกบิลไว้แล้ว</p></div></div>' +
     '<div class="row" style="justify-content:flex-end"><button class="btn primary" data-action="settings-save">บันทึกการตั้งค่า</button></div>';
+  if (cloud.code) cloudLoadInfo();
 };
 function saveSettings() {
   const prizes = $$('#prizeTable tr').slice(1).map(tr => ({ name: $('.pName', tr).value.trim(), amount: num($('.pAmount', tr).value) }))
@@ -867,8 +869,149 @@ function restoreFrom(file) {
   fr.readAsText(file);
 }
 
+/* ===================== 6) คลาวด์ + บอท LINE แจ้งยอด ===================== */
+// ส่งสำเนายอดบิล/รายการเงิน (ไม่ส่งรายชื่อผู้ใช้และเบอร์โทร) ขึ้นคลาวด์ เพื่อให้บอท LINE สรุปยอดได้แม้ปิดเครื่องนี้
+// คีย์ด้านล่างเป็นคีย์สาธารณะ ข้อมูลเข้าถึงได้ผ่านฟังก์ชันที่ต้องใช้ "รหัสร้าน" เท่านั้น
+const CLOUD_URL = 'https://vhrexjmzdcvlojzanvum.supabase.co';
+const CLOUD_API_KEY = 'sb_publishable_47xRsvJMYfqk1XSlW6qjaQ_8ABKblB5';
+const CLOUD_KEY = 'lotteryCashier.cloud';
+const LINE_HOOK = CLOUD_URL + '/functions/v1/lt-line-webhook';
+let cloud = {}, cloudLast = null, cloudBusy = false;
+try { cloud = JSON.parse(localStorage.getItem(CLOUD_KEY) || '{}') || {}; } catch (e) { cloud = {}; }
+function saveCloud() {
+  try { localStorage.setItem(CLOUD_KEY, JSON.stringify({ device: cloud.device, code: cloud.code || '', name: cloud.name || '' })); } catch (e) {}
+}
+if (!cloud.device) {
+  cloud.device = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+  saveCloud();
+}
+async function cloudRpc(fn, args) {
+  const res = await fetch(CLOUD_URL + '/rest/v1/rpc/lt_' + fn, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', apikey: CLOUD_API_KEY, Authorization: 'Bearer ' + CLOUD_API_KEY },
+    body: JSON.stringify(args || {})
+  });
+  let data = null;
+  try { data = await res.json(); } catch (e) {}
+  if (!res.ok) throw new Error((data && data.message) || 'เชื่อมต่อไม่สำเร็จ (' + res.status + ')');
+  return data;
+}
+function cloudPayload() {
+  return {
+    biz: state.settings.bizName,
+    bills: state.bills.map(b => ({
+      no: b.no, ts: b.ts, shop: b.shop, cashier: b.cashier, fee: b.fee, total: b.total, net: b.net, void: !!b.void,
+      tk: (b.sections || []).reduce((a, s) => a + (s.rows || []).reduce((x, r) => x + (r.qty || 0), 0), 0)
+    })),
+    cash: state.cash.map(c => ({ id: c.id, ts: c.ts, type: c.type, amount: c.amount, void: !!c.void }))
+  };
+}
+function cloudStatusText() {
+  if (!cloud.code) return '';
+  if (cloud.err) return '⚠️ ส่งข้อมูลขึ้นคลาวด์ไม่สำเร็จ: ' + cloud.err + ' (จะลองใหม่เอง)';
+  return cloud.at ? '✅ ส่งข้อมูลขึ้นคลาวด์ล่าสุด ' + fmtDT(cloud.at) : 'กำลังส่งข้อมูลขึ้นคลาวด์…';
+}
+async function cloudSync(force) {
+  if (!cloud.code || cloudBusy) return;
+  const p = JSON.stringify(cloudPayload());
+  if (!force && p === cloudLast && !cloud.err) return;
+  cloudBusy = true;
+  try {
+    await cloudRpc('sync', { p_code: cloud.code, p_device: cloud.device, p_name: cloud.name || '', p_state: JSON.parse(p) });
+    cloudLast = p; cloud.at = Date.now(); cloud.err = '';
+  } catch (e) { cloud.err = e.message === 'bad_code' ? 'รหัสร้านไม่ถูกต้อง' : e.message; }
+  cloudBusy = false;
+  const el = $('#cloudStat'); if (el) el.textContent = cloudStatusText();
+}
+function cloudCardHtml() {
+  const head = '<div class="card"><h3>คลาวด์ + บอท LINE แจ้งยอดประจำวัน</h3>';
+  if (!cloud.code) {
+    return head + '<p class="hint">เชื่อมแล้วโปรแกรมจะส่งสำเนายอดบิลและรายการเงินขึ้นคลาวด์ เพื่อให้บอท LINE สรุปยอดขึ้นเงินเข้ากลุ่มทุกวัน แม้ปิดเครื่องนี้ไปแล้ว (ไม่ส่งรายชื่อผู้ใช้และเบอร์โทร)</p><div class="row">' +
+      '<label class="f" style="flex:1;min-width:200px">รหัสร้าน (ตั้งเองครั้งแรก อย่างน้อย 6 ตัว)<input type="password" id="cloudCode" autocomplete="off"></label>' +
+      '<label class="f" style="flex:1;min-width:160px">ชื่อเครื่องนี้<input type="text" id="cloudName" maxlength="40" placeholder="เช่น เคาน์เตอร์ 1"></label></div>' +
+      '<p class="hint">ทุกเครื่องที่ออกบิลต้องใส่รหัสร้านเดียวกัน จดรหัสเก็บไว้ ห้ามบอกคนนอก</p>' +
+      '<div class="row"><button class="btn primary" data-action="cloud-connect">เชื่อมคลาวด์</button></div></div>';
+  }
+  return head + '<p class="hint" id="cloudStat">' + esc(cloudStatusText()) + '</p>' +
+    '<p class="hint" id="cloudLine">กำลังตรวจสถานะ LINE…</p>' +
+    '<ol class="hint" style="padding-left:18px;margin:6px 0">' +
+    '<li>ที่ LINE Developers เปิดแชนแนลของบอท คัดลอก Channel secret (แท็บ Basic settings) และ Channel access token (แท็บ Messaging API ล่างสุด) มาวางด้านล่าง แล้วกด "บันทึก LINE"</li>' +
+    '<li>ในแท็บ Messaging API ตั้ง Webhook URL เป็น <b style="word-break:break-all">' + LINE_HOOK + '</b> แล้วเปิด Use webhook</li>' +
+    '<li>เชิญบอทเข้ากลุ่ม LINE แล้วพิมพ์ในกลุ่มว่า <b>ลงทะเบียนกลุ่ม</b></li>' +
+    '<li>กด "ส่งข้อความทดสอบ" ในกลุ่มพิมพ์ <b>ยอด</b> หรือ <b>เมนู</b> เพื่อเรียกดูยอดได้ทุกเมื่อ</li></ol>' +
+    '<div class="row">' +
+    '<label class="f" style="flex:1;min-width:180px">Channel access token<input type="password" id="lineTok" autocomplete="off" placeholder="เว้นว่าง = คงค่าเดิม"></label>' +
+    '<label class="f" style="flex:1;min-width:180px">Channel secret<input type="password" id="lineSec" autocomplete="off" placeholder="เว้นว่าง = คงค่าเดิม"></label></div>' +
+    '<div class="row" style="margin-top:10px">' +
+    '<label class="f">เวลาส่งสรุปประจำวัน<input type="time" id="lineTime" value="20:00" style="width:130px"></label>' +
+    '<label class="f" style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="lineOn" checked> ส่งสรุปอัตโนมัติทุกวัน</label></div>' +
+    '<div class="row" style="margin-top:10px">' +
+    '<button class="btn primary" data-action="cloud-line-save">บันทึก LINE</button>' +
+    '<button class="btn" data-action="cloud-line-test">ส่งข้อความทดสอบ</button>' +
+    '<button class="btn" data-action="cloud-line-now">ส่งสรุปวันนี้เข้ากลุ่มตอนนี้</button>' +
+    '<button class="btn danger" data-action="cloud-disconnect">ยกเลิกการเชื่อมเครื่องนี้</button></div>' +
+    '<p class="hint" id="cloudDevices"></p></div>';
+}
+async function cloudLoadInfo() {
+  try {
+    const i = await cloudRpc('info', { p_code: cloud.code });
+    const el = $('#cloudLine'); if (!el) return;
+    el.textContent = 'LINE: Token ' + (i.token_set ? '✅' : '❌') + ' · Secret ' + (i.secret_set ? '✅' : '❌') + ' · กลุ่ม ' + (i.group_set ? '✅ ลงทะเบียนแล้ว' : '❌ ยังไม่ลงทะเบียน') +
+      ' · ส่งสรุปทุกวัน ' + i.report_time + ' น.' + (i.enabled ? '' : ' (ปิดอยู่)') + (i.last_sent ? ' · ส่งล่าสุด ' + i.last_sent : '');
+    if (document.activeElement !== $('#lineTime')) $('#lineTime').value = i.report_time;
+    $('#lineOn').checked = !!i.enabled;
+    $('#cloudDevices').textContent = 'เครื่องที่ส่งข้อมูล: ' + (i.devices.map(d => (d.name || 'ไม่ตั้งชื่อ') + (d.id === cloud.device ? ' (เครื่องนี้)' : '') + ' ' + d.bills + ' บิล · ' + fmtDT(new Date(d.synced_at).getTime())).join(' | ') || '–');
+  } catch (e) {
+    const el = $('#cloudLine'); if (el) el.textContent = e.message === 'bad_code' ? '⚠️ รหัสร้านไม่ถูกต้อง กด "ยกเลิกการเชื่อมเครื่องนี้" แล้วเชื่อมใหม่' : '⚠️ ตรวจสถานะไม่ได้: ' + e.message;
+  }
+}
+async function cloudConnect() {
+  const code = $('#cloudCode').value, name = $('#cloudName').value.trim();
+  if (code.length < 6) { toast('รหัสร้านต้องยาวอย่างน้อย 6 ตัว'); $('#cloudCode').focus(); return; }
+  try {
+    const st = await cloudRpc('status');
+    if (!st.setup) {
+      if (!confirm('ยังไม่เคยตั้งรหัสร้าน\nต้องการใช้รหัสที่กรอกเป็นรหัสร้านหรือไม่?\n\nจดรหัสเก็บไว้ เครื่องอื่นต้องใช้รหัสเดียวกัน และเปลี่ยนเองภายหลังไม่ได้')) return;
+      await cloudRpc('setup', { p_code: code });
+    }
+    await cloudRpc('info', { p_code: code });
+    cloud.code = code; cloud.name = name; cloud.err = ''; cloud.at = 0; saveCloud(); cloudLast = null;
+    await cloudSync(true); RENDER.settings(); toast(cloud.err ? 'เชื่อมแล้ว แต่ส่งข้อมูลยังไม่สำเร็จ' : 'เชื่อมคลาวด์แล้ว');
+  } catch (e) { toast(e.message === 'bad_code' ? 'รหัสร้านไม่ถูกต้อง' : 'เชื่อมไม่สำเร็จ: ' + e.message); }
+}
+async function cloudLineSave() {
+  try {
+    await cloudRpc('save_line', { p_code: cloud.code, p_token: $('#lineTok').value, p_secret: $('#lineSec').value, p_time: $('#lineTime').value, p_enabled: $('#lineOn').checked });
+    $('#lineTok').value = ''; $('#lineSec').value = ''; toast('บันทึก LINE แล้ว'); cloudLoadInfo();
+  } catch (e) { toast('บันทึกไม่สำเร็จ: ' + e.message); }
+}
+async function cloudLineSend(kind) {
+  try {
+    if (kind !== 'test') { await cloudSync(true); if (!confirm('ส่งสรุปยอดของวันนี้เข้ากลุ่ม LINE ตอนนี้?')) return; }
+    const r = await cloudRpc('send', { p_code: cloud.code, p_kind: kind });
+    if (!r.request) { toast('ยังส่งไม่ได้ — ต้องมี Token และลงทะเบียนกลุ่มก่อน'); return; }
+    for (let i = 0; i < 8; i++) {
+      await new Promise(ok => setTimeout(ok, 1500));
+      const s = await cloudRpc('line_result', { p_code: cloud.code, p_request: r.request });
+      if (s && s.done) { toast(s.status === 200 ? 'ส่งเข้า LINE สำเร็จ ✅' : 'LINE ตอบกลับผิดพลาด (' + (s.status || s.error) + ') ' + (s.body || '')); return; }
+    }
+    toast('ส่งคำขอไปยัง LINE แล้ว กรุณาตรวจในกลุ่ม');
+  } catch (e) { toast('ส่งไม่สำเร็จ: ' + e.message); }
+}
+function cloudDisconnect() {
+  if (!confirm('ยกเลิกการเชื่อมคลาวด์ของเครื่องนี้?\nบิลที่ออกจากเครื่องนี้หลังจากนี้จะไม่ถูกนับในยอดของบอท LINE (ข้อมูลในเครื่องไม่หาย)')) return;
+  cloud.code = ''; cloud.err = ''; saveCloud(); RENDER.settings(); toast('ยกเลิกการเชื่อมแล้ว');
+}
+setTimeout(() => cloudSync(true), 1500);
+setInterval(() => cloudSync(false), 5000);
+
 /* ===================== เหตุการณ์ ===================== */
 const ACTIONS = {
+  'cloud-connect': cloudConnect,
+  'cloud-line-save': cloudLineSave,
+  'cloud-line-test': () => cloudLineSend('test'),
+  'cloud-line-now': () => cloudLineSend('daily'),
+  'cloud-disconnect': cloudDisconnect,
   'print': () => window.print(),
   'close-modal': closeSheet,
   'bill-new': () => {
